@@ -226,7 +226,7 @@ One bot is featured at a time and it rotates every few minutes (`TV_ROTATE_MIN`)
    sudo bash setup.sh
    nano /opt/cogents-broadcast/.env
    ```
-   Paste the stream key into `TWITCH_STREAM_KEY`, and set `TV_URL` to `https://YOUR-DOMAIN/?sound&quality=0.7#/tv`. Save and exit.
+   Paste the stream key into `TWITCH_STREAM_KEY`, and set `TV_URL` to `https://YOUR-DOMAIN/?sound&quality=0.4&fps=20#/tv`. Save and exit.
 4. Start it:
    ```bash
    systemctl start cogents-broadcast

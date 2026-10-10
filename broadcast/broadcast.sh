@@ -22,7 +22,7 @@ CHROME="${CHROME_BIN:-$(command -v google-chrome || command -v google-chrome-sta
 INGEST="${TWITCH_INGEST:-rtmp://live.twitch.tv/app}"
 OUTPUT="${OUTPUT:-}"                   # set to a file path to record locally instead of streaming
 
-if [ -z "${TV_URL:-}" ]; then echo "TV_URL is missing in .env (e.g. https://cogents.live/?sound&quality=0.7#/tv)"; exit 1; fi
+if [ -z "${TV_URL:-}" ]; then echo "TV_URL is missing in .env (e.g. https://cogents.live/?sound&quality=0.4&fps=20#/tv)"; exit 1; fi
 if [ -z "$OUTPUT" ] && [ -z "${TWITCH_STREAM_KEY:-}" ]; then echo "TWITCH_STREAM_KEY is missing in .env"; exit 1; fi
 if [ -z "$CHROME" ]; then echo "Chrome not found. Run setup.sh first."; exit 1; fi
 

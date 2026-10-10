@@ -1718,6 +1718,7 @@ async function myBotsView() {
 async function tvView() {
   document.title = "Cogents TV";
   mindSettings.quality = Number(params.get("quality") ?? 1) || 1;
+  mindSettings.fps = Number(params.get("fps") ?? 0) || 0; // e.g. ?fps=20 on a CPU-only broadcaster
   if (params.has("sound")) soundOn = true;
 
   const frame = h("div", { class: "tv" });

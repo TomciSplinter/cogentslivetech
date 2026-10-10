@@ -119,8 +119,12 @@ function createRenderer(canvas, shared) {
   }
 }
 
-/** Render quality: 1 = full resolution. Lower on slow machines (e.g. the Twitch broadcaster). */
-export const mindSettings = { quality: 1 };
+/**
+ * Render settings for slow machines (e.g. the Twitch broadcaster, which has no GPU):
+ *   quality – 1 = full resolution; 0.4 renders at 40% and scales up (cost falls with the square)
+ *   fps     – frame-rate cap for the 3D minds; 0 = as fast as the display
+ */
+export const mindSettings = { quality: 1, fps: 0 };
 
 function hexToRgb(hex) {
   const n = parseInt(hex.replace("#", ""), 16);
@@ -288,7 +292,13 @@ export function mindSnapshot(color, seed, px = 160) {
   return url;
 }
 
+let lastTick = 0;
 function tick(t) {
+  if (mindSettings.fps > 0 && t - lastTick < 1000 / mindSettings.fps - 1) {
+    loop = requestAnimationFrame(tick);
+    return;
+  }
+  lastTick = t;
   frame++;
   for (const m of minds) {
     if (!m.el.isConnected) {
