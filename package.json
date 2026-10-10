@@ -1,0 +1,18 @@
+{
+  "name": "cogents-engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cogents bot engine: AI memecoin traders that stream their trades live.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "start": "node src/index.ts",
+    "demo": "MARKET=mock node src/index.ts",
+    "test": "node test/run-all.ts && node test/real-money.ts",
+    "new-wallet": "node scripts/new-wallet.ts",
+    "check-keys": "node scripts/check-keys.ts",
+    "export-key": "node scripts/export-key.ts"
+  }
+}

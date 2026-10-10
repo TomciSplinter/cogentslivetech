@@ -1,0 +1,95 @@
+# ============================================================
+# Cogents engine settings
+# Copy this file to ".env" and fill in your keys:
+#     cp .env.example .env && nano .env
+# NEVER commit .env to GitHub or share it.
+# ============================================================
+
+# --- Market data --------------------------------------------
+# pumpportal = live pump.fun data, mock = simulated market (free)
+MARKET=pumpportal
+# From pumpportal.fun. Needed to see live trades on coins.
+# Its linked wallet needs ~0.02 SOL; trade data costs 0.01 SOL per 10,000 messages.
+PUMPPORTAL_API_KEY=
+# How many fresh coins to watch live. Higher = smarter bots, higher PumpPortal cost.
+WATCHLIST_SIZE=25
+
+# --- AI brain (Anthropic) -----------------------------------
+ANTHROPIC_API_KEY=
+BRAIN_MODEL=claude-sonnet-5-5
+CHAT_MODEL=claude-haiku-5-5
+MAX_AI_CALLS_PER_DAY=6000
+
+# --- Voices (ElevenLabs) ------------------------------------
+ELEVENLABS_API_KEY=
+ELEVENLABS_MODEL=eleven_flash_v2_5
+# Daily voice budget. 24/7 Twitch needs roughly 150k-300k characters a day;
+# when it runs out, bots keep going with captions only until midnight UTC.
+MAX_TTS_CHARS_PER_DAY=60000
+# While watched, a bot talks after this many quiet seconds (higher = cheaper)
+IDLE_TALK_SEC=60
+# Voice IDs from your ElevenLabs voice library (Voices → ⋯ → Copy voice ID)
+BOT_VEGA_VOICE_ID=
+BOT_ROHM_VOICE_ID=
+BOT_OBEL_VOICE_ID=
+
+# --- Database (Supabase) ------------------------------------
+# Project Settings → API. Use the SECRET key (sb_secret_… or the old service_role key).
+SUPABASE_URL=https://YOUR-PROJECT.supabase.co
+SUPABASE_SECRET_KEY=
+
+# --- Solana (Helius) ----------------------------------------
+SOLANA_RPC_URL=https://mainnet.helius-rpc.com/?api-key=YOUR_KEY
+
+# --- Paper trading ------------------------------------------
+PAPER_START_SOL=5
+
+# --- REAL MONEY ---------------------------------------------
+# Master switch. false = every bot trades paper money, whatever else is set.
+REAL_TRADING_ENABLED=true
+# House bots: MODE=real + a wallet secret (create with: npm run new-wallet).
+# A bot set to real without a secret stays in paper mode and says so in the log.
+BOT_VEGA_MODE=real
+BOT_VEGA_SECRET_KEY=
+BOT_ROHM_MODE=real
+BOT_ROHM_SECRET_KEY=
+BOT_OBEL_MODE=real
+BOT_OBEL_SECRET_KEY=
+SLIPPAGE_PCT=15
+PRIORITY_FEE_SOL=0.0005
+
+# Emergency brake: true = no new buys (bots can still sell)
+PAUSE_BUYS=false
+
+# --- Public API (create-a-bot) ------------------------------
+API_PORT=8787
+# Your website address(es), comma-separated. Only these may call the API.
+ALLOWED_ORIGINS=https://YOUR-DOMAIN
+
+# --- User-created bots --------------------------------------
+USER_BOTS_ENABLED=true
+MAX_USER_BOTS=50
+MAX_BOTS_PER_WALLET=3
+USER_PAPER_START_SOL=2
+# Cheaper AI for user bots, and how often unwatched user bots think (seconds)
+USER_BOT_MODEL=claude-haiku-5-5
+USER_BOT_IDLE_TURN_SEC=300
+# Voices users can pick: Name:voiceId,Name:voiceId (make them in ElevenLabs)
+USER_VOICES=
+# Real-money user bots: each gets its own wallet; the creator deposits and withdraws.
+USER_REAL_TRADING_ENABLED=true
+# Suggested first deposit shown on the website
+MIN_DEPOSIT_SOL=0.1
+# REQUIRED for real-money user bots. Encrypts their wallet keys.
+# Generate once: openssl rand -hex 32
+# Back it up in your password manager: lose it and those wallets are lost. Never change it.
+MASTER_KEY=
+
+# --- Cogents TV / Twitch ------------------------------------
+# Minutes before the featured bot rotates
+TV_ROTATE_MIN=6
+# Your Twitch channel name (bots read its chat). Leave empty to skip.
+TWITCH_CHANNEL=
+# Optional: a Twitch account + chat token so bots also reply IN Twitch chat
+TWITCH_BOT_USERNAME=
+TWITCH_OAUTH_TOKEN=

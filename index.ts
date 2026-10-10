@@ -1,0 +1,93 @@
+// Cogents engine: market feed, all bots (house + user-created), Cogents TV,
+// Twitch chat, and the public API for the website.
+//   npm start        → live pump.fun data
+//   npm run demo     → simulated market (free, for testing)
+import { startApi } from "./api.ts";
+import { createBrain } from "./brain.ts";
+import { config, describeConfig } from "./config.ts";
+import { BotManager } from "./manager.ts";
+import { createMarket } from "./market.ts";
+import { hasMasterKey } from "./secrets.ts";
+import { createStore, type CoinRow } from "./store.ts";
+import { log } from "./util.ts";
+
+async function main() {
+  log("cogents", `starting engine\n  ${describeConfig()}`);
+  if (config.userRealTradingEnabled && !hasMasterKey()) {
+    log("cogents", "USER_REAL_TRADING_ENABLED needs a MASTER_KEY (openssl rand -hex 32). Real-money user bots stay off.");
+  }
+  const market = createMarket();
+  const brain = createBrain();
+  const store = createStore();
+  const manager = new BotManager(market, brain, store);
+
+  await manager.load();
+  market.start();
+  manager.start();
+
+  const timers: ReturnType<typeof setInterval>[] = [];
+
+  // live coin snapshots for the website's charts (held + watched + top movers)
+  timers.push(
+    setInterval(async () => {
+      try {
+        if (config.market === "pumpportal") market.housekeeping(Date.now());
+        market.setHeld(manager.allHeld());
+        const mints = new Set<string>(manager.allHeld());
+        for (const b of manager.bots.values()) if (b.watching) mints.add(b.watching);
+        market.candidates(Date.now(), 60, 10).forEach((c) => mints.add(c.mint));
+        const rows: CoinRow[] = [];
+        const nowIso = new Date().toISOString();
+        for (const m of mints) {
+          const c = market.getCoin(m);
+          if (!c) continue;
+          rows.push({
+            mint: c.mint,
+            symbol: c.symbol,
+            name: c.name,
+            mcap_sol: c.mcapSol,
+            price_sol: c.priceSol,
+            progress: c.progress,
+            created_at: new Date(c.createdAt).toISOString(),
+            history: c.history.slice(-180),
+            candles: c.candles.slice(-160).map((k) => [k[0], +k[1].toFixed(3), +k[2].toFixed(3), +k[3].toFixed(3), +k[4].toFixed(3), +k[5].toFixed(3)] as [number, number, number, number, number, number]),
+            updated_at: nowIso,
+          });
+        }
+        await store.upsertCoins(rows);
+      } catch (e) {
+        log("coins", "snapshot failed:", (e as Error).message);
+      }
+    }, 10_000),
+  );
+
+  timers.push(setInterval(() => store.cleanup().catch((e) => log("store", "cleanup failed:", e.message)), 3600_000));
+
+  const api = startApi(manager, () => ({
+    market: config.market,
+    coinsTracked: market.coins.size,
+    tv: manager.tvBotId,
+    bots: [...manager.bots.values()].map((b) => ({ id: b.def.id, house: b.def.house, mode: b.exec.mode, paused: !!b.def.paused, sol: b.state.solBalance, bags: b.state.positions.size, viewers: b.viewers })),
+  }));
+
+  const shutdown = () => {
+    log("cogents", "shutting down");
+    timers.forEach(clearInterval);
+    manager.stop();
+    market.stop();
+    api.close();
+    setTimeout(() => process.exit(0), 500);
+  };
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
+}
+
+process.on("unhandledRejection", (e) => log("cogents", "unhandled:", (e as Error)?.message ?? e));
+
+main().catch((e) => {
+  console.error(e);
+  if (/column|schema cache|relation .* does not exist/i.test(String((e as Error)?.message ?? e))) {
+    console.error("\nThe database is missing something this version needs. Run supabase/schema.sql again in the Supabase SQL Editor (safe to re-run), then restart.");
+  }
+  process.exit(1);
+});
