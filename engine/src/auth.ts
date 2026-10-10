@@ -3,7 +3,7 @@
 //
 // Message format (the website builds it, the user sees it in their wallet):
 //
-//   Cogents wants you to sign in with your Solana account:
+//   Cogents: sign this message to prove you own this wallet. It costs nothing and moves no funds.
 //   <wallet address>
 //
 //   Action: create-bot
@@ -55,7 +55,7 @@ export function verifyRequest(req: SignedRequest, expect: { action: string; bot?
   }
   if (req.message.length > 1000 || req.payload.length > 8000) throw new AuthError("request too large");
   const lines = req.message.split("\n");
-  if (lines[0] !== "Cogents wants you to sign in with your Solana account:") throw new AuthError("unexpected message format");
+  if (lines[0] !== "Cogents: sign this message to prove you own this wallet. It costs nothing and moves no funds.") throw new AuthError("unexpected message format");
   if (lines[1] !== req.owner) throw new AuthError("message is for a different wallet");
   const field = (name: string) => lines.find((l) => l.startsWith(`${name}: `))?.slice(name.length + 2) ?? "";
 

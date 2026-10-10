@@ -59,7 +59,7 @@ export const wallet = {
     if (!this.address) await this.connect();
     const payload = JSON.stringify(details ?? {});
     const message = [
-      "Cogents wants you to sign in with your Solana account:",
+      "Cogents: sign this message to prove you own this wallet. It costs nothing and moves no funds.",
       this.address,
       "",
       `Action: ${action}`,

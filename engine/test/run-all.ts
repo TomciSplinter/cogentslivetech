@@ -210,7 +210,7 @@ const user = walletFromSecret(newWallet().secret);
 function signedReq(action: string, bot: string, payloadObj: unknown, opts: { issued?: number; nonce?: string; owner?: string } = {}) {
   const payload = JSON.stringify(payloadObj);
   const message = [
-    "Cogents wants you to sign in with your Solana account:",
+    "Cogents: sign this message to prove you own this wallet. It costs nothing and moves no funds.",
     opts.owner ?? user.publicKey,
     "",
     `Action: ${action}`,
