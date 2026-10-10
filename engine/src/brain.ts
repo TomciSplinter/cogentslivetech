@@ -95,6 +95,20 @@ export class ClaudeBrain implements Brain {
   }
 
   private async message(body: Record<string, unknown>): Promise<any> {
+    try {
+      return await this.post(body);
+    } catch (e) {
+      // Some models reject a forced tool_choice with HTTP 400. Ask again without forcing it:
+      // the system prompt already says which tool to answer with.
+      if (body.tool_choice && /HTTP 400/.test((e as Error).message)) {
+        const { tool_choice: _drop, ...rest } = body;
+        return this.post(rest);
+      }
+      throw e;
+    }
+  }
+
+  private async post(body: Record<string, unknown>): Promise<any> {
     const res = await fetchT(
       "https://api.anthropic.com/v1/messages",
       {
@@ -139,7 +153,7 @@ export class ClaudeBrain implements Brain {
       tool_choice: { type: "tool", name: "decide" },
     });
     const tool = (r.content ?? []).find((b: any) => b.type === "tool_use");
-    const i = tool?.input ?? {};
+    const i = tool?.input ?? parseJsonText(r) ?? {};
     const action = ["buy", "sell", "hold"].includes(i.action) ? i.action : "hold";
     return {
       action,
@@ -191,7 +205,7 @@ export class ClaudeBrain implements Brain {
       ],
       tool_choice: { type: "tool", name: "review" },
     });
-    const i = (r.content ?? []).find((b: any) => b.type === "tool_use")?.input ?? {};
+    const i = (r.content ?? []).find((b: any) => b.type === "tool_use")?.input ?? parseJsonText(r) ?? {};
     return i.allowed === false ? { ok: false, reason: String(i.reason ?? "This character isn't allowed.").slice(0, 200) } : { ok: true };
   }
 }
@@ -273,4 +287,17 @@ export function createBrain(): Brain {
   if (config.anthropicKey) return new ClaudeBrain();
   log("brain", "no ANTHROPIC_API_KEY, using rule-based MockBrain");
   return new MockBrain();
+}
+
+/** If the model answered in plain text instead of with the tool, pull a JSON object out of it. */
+function parseJsonText(r: any): Record<string, unknown> | undefined {
+  const text = (r?.content ?? []).filter((b: any) => b.type === "text").map((b: any) => b.text).join("\n");
+  const m = text.match(/\{[\s\S]*\}/);
+  if (!m) return undefined;
+  try {
+    const o = JSON.parse(m[0]);
+    return o && typeof o === "object" ? o : undefined;
+  } catch {
+    return undefined;
+  }
 }
