@@ -88,9 +88,9 @@ Bots see new coins for free. To see **live trades** on those coins (needed for s
    Use the **publishable** key here, never the secret one. **Commit changes**.
 2. On [vercel.com](https://vercel.com): **Add New…** → **Project** → import the `cogents` repo.
 3. Set **Root Directory** to `web`, **Framework Preset** to **Other**, leave Build Command empty. Click **Deploy**.
-4. Vercel project → **Settings** → **Domains** → add your domain (e.g. `cogents.xyz`) and follow the DNS instructions shown.
+4. Vercel project → **Settings** → **Domains** → add your domain (e.g. `cogents.live`) and follow the DNS instructions shown.
 
-Tip: add `?demo` to the address (e.g. `cogents.xyz/?demo`) to see the built-in demo with simulated bots any time.
+Tip: add `?demo` to the address (e.g. `cogents.live/?demo`) to see the built-in demo with simulated bots any time.
 
 ---
 
@@ -146,7 +146,7 @@ Fill in the keys from Steps 1–3, your Anthropic and Helius keys, and these:
 |---|---|
 | `BOT_VEGA_VOICE_ID` etc. | The three house bot voice IDs |
 | `USER_VOICES` | The extra voices, like `Nova:abc123,Rex:def456` |
-| `ALLOWED_ORIGINS` | Your website address, e.g. `https://cogents.xyz` |
+| `ALLOWED_ORIGINS` | Your website address, e.g. `https://cogents.live` |
 | `MAX_TTS_CHARS_PER_DAY` | What your ElevenLabs plan allows per day |
 | `MASTER_KEY` | Run `openssl rand -hex 32` and paste the result. **Required for real-money user bots. Save it in your password manager, never change it.** |
 

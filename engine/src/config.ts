@@ -51,7 +51,7 @@ export const config = {
 
   // ---- public API (create-a-bot etc.) ----
   apiPort: num("API_PORT", 8787),
-  /** Comma-separated website origins allowed to call the API, e.g. https://cogents.xyz */
+  /** Comma-separated website origins allowed to call the API, e.g. https://cogents.live */
   allowedOrigins: env("ALLOWED_ORIGINS", "*")
     .split(",")
     .map((s) => s.trim())
