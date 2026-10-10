@@ -1068,7 +1068,7 @@ function buildPlayer(bot, { tv = false, chat = false } = {}) {
         scanner.hidden = true;
         chartHost.hidden = false;
         const position = pos.find((p) => p.mint === coin.mint);
-        const marks = (trades ?? []).filter((t) => t.mint === coin.mint).map((t) => ({ t: Date.parse(t.created_at), side: t.side }));
+        const marks = (trades ?? []).filter((t) => t.mint === coin.mint).map((t) => ({ t: Date.parse(t.created_at), side: t.side, sol: t.sol }));
         lastChart = { candles: coin.candles, opts: { entry: position ? Number(position.entry_price) * 1e9 : undefined, marks } };
         draw();
         // holding: the position's own profit (same number as Open bags); watching: the last 10 minutes

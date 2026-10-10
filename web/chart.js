@@ -91,6 +91,7 @@ function tickLabel(v, step, prefix = "") {
  */
 export function renderCandles(host, candles, { entry, marks = [], compact = false, big = false, usd = 0, frame = "5s" } = {}) {
   const prefix = usd ? "$" : "";
+  const r2 = (v) => Math.round(v * 2) / 2;
   if (usd) {
     candles = candles.map((k) => [k[0], k[1] * usd, k[2] * usd, k[3] * usd, k[4] * usd, k[5]]);
     if (entry) entry *= usd;
@@ -183,17 +184,30 @@ export function renderCandles(host, candles, { entry, marks = [], compact = fals
       parts.push(`<text x="${W - 14}" y="${entryY + fs / 3}" class="cg-tag cg-tag-dark" style="font-size:${fs}px" text-anchor="end">${fmtMcap(entry, prefix)}</text>`);
     }
   }
-  // buy / sell marks
-  for (const m of marks) {
-    const i = bars.findIndex((b) => m.t >= b[0] && m.t < b[0] + ms);
-    if (i < 0) continue;
-    const x = X(i);
-    if (m.side === "buy") {
-      const y = Y(bars[i][3]) + 8;
-      parts.push(`<path d="M${x} ${y} l5 9 h-10 z" fill="${UP}" class="cg-mark"/>`);
-    } else {
-      const y = Y(bars[i][2]) - 8;
-      parts.push(`<path d="M${x} ${y} l5 -9 h-10 z" fill="${DOWN}" class="cg-mark"/>`);
+  // buy / sell bubbles, like a trading terminal: green B under the candle, red S above it.
+  // Several trades in one candle stack outward so they stay readable.
+  if (!compact) {
+    const r = big ? 12 : 10;
+    const mfs = big ? 13 : 11;
+    const stacked = new Map();
+    for (const m of [...marks].sort((a, b) => a.t - b.t)) {
+      const i = bars.findIndex((b) => m.t >= b[0] && m.t < b[0] + ms);
+      if (i < 0) continue;
+      const key = `${i}:${m.side}`;
+      const n = stacked.get(key) ?? 0;
+      stacked.set(key, n + 1);
+      const x = r2(X(i));
+      const buy = m.side === "buy";
+      const edge = buy ? Y(bars[i][3]) : Y(bars[i][2]);
+      const cy = r2(buy ? edge + 6 + r + n * (2 * r + 3) : edge - 6 - r - n * (2 * r + 3));
+      const col = buy ? UP : DOWN;
+      const tip = m.sol != null ? `${buy ? "Bought" : "Sold"} ${Number(m.sol).toFixed(3)} SOL` : buy ? "Bought" : "Sold";
+      parts.push(
+        `<g class="cg-mark"><title>${tip}</title>` +
+          `<line x1="${x}" x2="${x}" y1="${r2(edge)}" y2="${r2(buy ? cy - r : cy + r)}" stroke="${col}" stroke-width="1" opacity=".7"/>` +
+          `<circle cx="${x}" cy="${cy}" r="${r}" fill="${col}" stroke="#07090f" stroke-width="1.5"/>` +
+          `<text x="${x}" y="${cy + mfs * 0.36}" text-anchor="middle" class="cg-tag cg-tag-dark" style="font-size:${mfs}px;font-weight:700">${buy ? "B" : "S"}</text></g>`,
+      );
     }
   }
   // last price line + tag
