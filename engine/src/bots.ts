@@ -67,7 +67,7 @@ export const PRESETS: Record<PresetId, Preset> = {
     blurb: "Hits brand-new coins in their first minutes, takes profit fast, never chases.",
     turnSec: 90,
     style: "You hunt brand-new coins in their first minutes, get in early, take profit fast, and never chase pumps. Calm and precise.",
-    limits: { ...base, maxBuySol: 0.3, maxBuyPct: 20, dailySpendSol: 3, dailyTrades: 40, buyCooldownSec: 180, maxPositions: 2, takeProfitPct: 40, stopLossPct: 15, maxHoldMin: 20, maxCoinAgeMin: 15 },
+    limits: { ...base, maxBuySol: 0.3, maxBuyPct: 20, dailySpendSol: 6, dailyTrades: 120, buyCooldownSec: 180, maxPositions: 2, takeProfitPct: 40, stopLossPct: 15, maxHoldMin: 20, maxCoinAgeMin: 15 },
   },
   degen: {
     id: "degen",
@@ -75,7 +75,7 @@ export const PRESETS: Record<PresetId, Preset> = {
     blurb: "Apes into momentum, trades often and narrates every win and loss out loud.",
     turnSec: 60,
     style: "You ape into momentum, trade often, celebrate wins loudly and visibly tilt after losses. High energy.",
-    limits: { ...base, maxBuySol: 0.5, maxBuyPct: 30, dailySpendSol: 5, dailyTrades: 60, buyCooldownSec: 90, maxPositions: 3, takeProfitPct: 80, stopLossPct: 25, maxHoldMin: 30, maxCoinAgeMin: 45 },
+    limits: { ...base, maxBuySol: 0.5, maxBuyPct: 30, dailySpendSol: 10, dailyTrades: 200, buyCooldownSec: 90, maxPositions: 3, takeProfitPct: 80, stopLossPct: 25, maxHoldMin: 30, maxCoinAgeMin: 45 },
   },
   analyst: {
     id: "analyst",
@@ -83,7 +83,7 @@ export const PRESETS: Record<PresetId, Preset> = {
     blurb: "Reads the numbers, hates rugs, slow to buy, always explains why.",
     turnSec: 180,
     style: "You care about the numbers: dev wallet behaviour, buyer count, buy/sell ratio, volume, age. You hate rugs, are slow to buy, and always explain why.",
-    limits: { ...base, maxBuySol: 0.3, maxBuyPct: 15, dailySpendSol: 2, dailyTrades: 25, buyCooldownSec: 600, maxPositions: 2, takeProfitPct: 60, stopLossPct: 20, maxHoldMin: 60, maxCoinAgeMin: 60 },
+    limits: { ...base, maxBuySol: 0.3, maxBuyPct: 15, dailySpendSol: 4, dailyTrades: 70, buyCooldownSec: 600, maxPositions: 2, takeProfitPct: 60, stopLossPct: 20, maxHoldMin: 60, maxCoinAgeMin: 60 },
   },
   diamond: {
     id: "diamond",
@@ -91,7 +91,7 @@ export const PRESETS: Record<PresetId, Preset> = {
     blurb: "Few picks, long holds, never panics over a red candle.",
     turnSec: 240,
     style: "You make few picks and hold them long. You don't panic over red candles and you mock paper hands.",
-    limits: { ...base, maxBuySol: 0.4, maxBuyPct: 25, dailySpendSol: 2, dailyTrades: 12, buyCooldownSec: 1200, maxPositions: 2, takeProfitPct: 150, stopLossPct: 40, maxHoldMin: 240, maxCoinAgeMin: 120 },
+    limits: { ...base, maxBuySol: 0.4, maxBuyPct: 25, dailySpendSol: 4, dailyTrades: 40, buyCooldownSec: 1200, maxPositions: 2, takeProfitPct: 150, stopLossPct: 40, maxHoldMin: 240, maxCoinAgeMin: 120 },
   },
   shitposter: {
     id: "shitposter",
@@ -99,7 +99,7 @@ export const PRESETS: Record<PresetId, Preset> = {
     blurb: "Talks first, trades second. Roasts everyone, including itself.",
     turnSec: 120,
     style: "You talk first and trade second. You roast the other bots, chat and yourself. Small bets, big opinions.",
-    limits: { ...base, maxBuySol: 0.15, maxBuyPct: 15, dailySpendSol: 1, dailyTrades: 30, buyCooldownSec: 300, maxPositions: 2, takeProfitPct: 50, stopLossPct: 25, maxHoldMin: 30, maxCoinAgeMin: 30 },
+    limits: { ...base, maxBuySol: 0.15, maxBuyPct: 15, dailySpendSol: 2, dailyTrades: 90, buyCooldownSec: 300, maxPositions: 2, takeProfitPct: 50, stopLossPct: 25, maxHoldMin: 30, maxCoinAgeMin: 30 },
   },
 };
 
