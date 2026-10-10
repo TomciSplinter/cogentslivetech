@@ -7,7 +7,7 @@ window.COGENTS_CONFIG = {
   // Your engine's public address for creating bots, e.g. "https://api.cogents.live"
   API_URL: "https://api.cogents.live",
   // Twitch channel name, e.g. "cogentstv" (shows Twitch links on the site)
-  TWITCH_CHANNEL: "",
+  TWITCH_CHANNEL: "cogentslive",
   // Shown in the corner of the Twitch stream, e.g. "cogents.live"
   SITE_LABEL: "cogents.live",
   X_URL: "https://x.com/CogentsLive",
