@@ -12,6 +12,7 @@ export interface Position {
   costSol: number; // SOL spent incl. fees
   entryPrice: number; // SOL per token at entry
   openedAt: number;
+  peakPct?: number; // best unrealized P&L seen, for the trailing stop
 }
 
 export interface BotState {
@@ -51,7 +52,11 @@ export function forcedExits(s: BotState, limits: Limits, market: Market, now: nu
   const out: ForcedExit[] = [];
   for (const p of s.positions.values()) {
     const pnl = positionPnlPct(p, market.priceOf(p.mint));
+    p.peakPct = Math.max(p.peakPct ?? 0, pnl);
+    const arm = limits.trailArmPct ?? 0;
+    const trailing = arm > 0 && p.peakPct >= arm && pnl <= p.peakPct - (limits.trailDropPct ?? arm / 2);
     if (pnl >= limits.takeProfitPct) out.push({ mint: p.mint, reason: "take-profit" });
+    else if (trailing) out.push({ mint: p.mint, reason: "trailing-stop" });
     else if (pnl <= -limits.stopLossPct) out.push({ mint: p.mint, reason: "stop-loss" });
     else if (now - p.openedAt >= limits.maxHoldMin * 60_000) out.push({ mint: p.mint, reason: "max-hold" });
   }

@@ -123,7 +123,9 @@ export abstract class Market {
       if (now - c.lastTradeAt > 5 * 60_000) continue;
       out.push(this.stats(c, now));
     }
-    out.sort((a, b) => b.vol5mSol - a.vol5mSol || b.buys5m - a.buys5m);
+    // real interest first: distinct buyers beat raw volume (one whale or the dev can fake volume);
+    // coins whose creator already sold go to the bottom
+    out.sort((a, b) => Number(a.devSold) - Number(b.devSold) || b.uniqueBuyers5m - a.uniqueBuyers5m || b.vol5mSol - a.vol5mSol);
     return out.slice(0, limit);
   }
 

@@ -21,6 +21,7 @@ const FORCED_LINES: Record<string, string[]> = {
   "take-profit": ["Profit taken on {sym}. Up {pnl} percent.", "Ringing the register on {sym}, plus {pnl} percent."],
   "stop-loss": ["Stop hit on {sym}. Down {pnl} percent. Moving on.", "{sym} stopped out at minus {pnl}. It happens."],
   "max-hold": ["Held {sym} long enough. Closing it at {pnl} percent.", "Time's up on {sym}, out at {pnl} percent."],
+  "trailing-stop": ["{sym} rolled over from the top. Locking in plus {pnl} percent.", "Trailing stop on {sym}, banking {pnl} percent before it fades."],
 };
 
 export class Bot {
@@ -172,6 +173,33 @@ export class Bot {
   }
 
   /** One trading turn. Safe to call on a timer; overlapping calls are skipped. */
+  /** Stop-loss, take-profit, trailing stop and max-hold, checked by code (no AI). */
+  private async enforceExits(now: number) {
+    for (const fx of forcedExits(this.state, this.def.limits, this.market, now)) {
+      const p = this.state.positions.get(fx.mint)!;
+      const pnl = positionPnlPct(p, this.market.priceOf(p.mint));
+      const ok = await this.sell(p, fx.reason, now);
+      if (ok) {
+        const lines = FORCED_LINES[fx.reason === "trailing-stop" && pnl < 0 ? "stop-loss" : fx.reason] ?? FORCED_LINES["max-hold"];
+        await this.say(lines[Math.floor(Math.random() * lines.length)].replace("{sym}", p.symbol).replace("{pnl}", Math.abs(pnl).toFixed(0)), "trade");
+        await this.store.updateBot(this.def.id, { sol_balance: round(this.state.solBalance, 6), trades_today: this.state.tradesToday, ...this.statsRow() }).catch(() => {});
+      }
+    }
+  }
+
+  /** Runs every few seconds between AI turns, so a dump doesn't wait for the next turn. */
+  async guard(now = Date.now()) {
+    if (this.busy || this.def.paused || !this.state.positions.size) return;
+    this.busy = true;
+    try {
+      await this.enforceExits(now);
+    } catch (e) {
+      log(this.def.id, "guard error:", (e as Error).message);
+    } finally {
+      this.busy = false;
+    }
+  }
+
   async turn(now = Date.now()) {
     if (this.busy) return;
     this.busy = true;
@@ -199,15 +227,7 @@ export class Bot {
       }
 
       // 1) exits enforced by code, before the AI is asked anything
-      for (const fx of forcedExits(this.state, this.def.limits, this.market, now)) {
-        const p = this.state.positions.get(fx.mint)!;
-        const pnl = positionPnlPct(p, this.market.priceOf(p.mint));
-        const ok = await this.sell(p, fx.reason, now);
-        if (ok) {
-          const lines = FORCED_LINES[fx.reason];
-          await this.say(lines[Math.floor(Math.random() * lines.length)].replace("{sym}", p.symbol).replace("{pnl}", Math.abs(pnl).toFixed(0)), "trade");
-        }
-      }
+      await this.enforceExits(now);
 
       // nothing to trade with: don't spend an AI call
       if (!this.state.positions.size && this.state.solBalance < this.def.limits.minBuySol + this.def.limits.reserveSol) {

@@ -107,6 +107,7 @@ export class BotManager {
     };
     this.twitch.start();
     this.timers.push(setInterval(() => this.schedule(), 5_000));
+    this.timers.push(setInterval(() => this.bots.forEach((b) => b.guard()), 4_000));
     this.timers.push(setInterval(() => this.chatAndViewers(), 6_000));
     this.timers.push(setInterval(() => this.idle(), 10_000));
     this.timers.push(setInterval(() => this.pickTv().catch((e) => log("tv", e.message)), 30_000));

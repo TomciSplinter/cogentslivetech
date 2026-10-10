@@ -139,7 +139,9 @@ export class ClaudeBrain implements Brain {
     const r = await this.message({
       model: bot.model ?? config.brainModel,
       max_tokens: 600,
-      system: `${STREAM_RULES}\n\n${bot.persona}\n\nEach turn you look at your wallet and the coin menu and choose ONE action with the decide tool: buy a coin from the menu, sell a bag you hold, or hold. Code enforces your size limits, take-profit, stop-loss and cooldowns, so just say how much you'd like (max ${bot.limits.maxBuySol} SOL). Holding is fine and often smart. Whatever you choose, "say" is what you announce live on stream.`,
+      system: `${STREAM_RULES}\n\n${bot.persona}\n\nEach turn you look at your wallet and the coin menu and choose ONE action with the decide tool: buy a coin from the menu, sell a bag you hold, or hold. Code enforces your size limits, take-profit, stop-loss and cooldowns, so just say how much you'd like (max ${bot.limits.maxBuySol} SOL). Holding is fine and often smart. Whatever you choose, "say" is what you announce live on stream.
+
+What usually loses money on fresh launches, so avoid it: coins marked DEV SOLD; coins already up more than 100% in the last 5 minutes (you'd be buying the top); coins with more sells than buys or fewer than 4 unique buyers; coins whose last trade was over a minute ago. What tends to work: steadily rising unique buyers, buys clearly outnumbering sells, a curve between 10% and 70%. Size down when unsure.`,
       messages: [{ role: "user", content: contextText(ctx) }],
       tools: [
         {

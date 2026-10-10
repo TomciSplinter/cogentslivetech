@@ -106,6 +106,21 @@ ok(!r.ok, "daily spend budget enforced");
 r = checkBuy(s, L, "B", 0.2, menu, now0 + 86400_000);
 ok(r.ok, "daily budget resets the next UTC day");
 
+// trailing stop: a bag that ran up and rolled over gets sold with the gain locked in
+{
+  const prices = new Map<string, number>();
+  const fakeMarket = { priceOf: (m: string) => prices.get(m) } as any;
+  const T = { ...L, takeProfitPct: 500, stopLossPct: 50, maxHoldMin: 999, trailArmPct: 30, trailDropPct: 15 };
+  const st = newState(5);
+  recordBuy(st, { mint: "T", symbol: "T", tokens: 1000, costSol: 0.3, entryPrice: 0.0003, openedAt: now0 }, 0.3, now0);
+  prices.set("T", 0.0003 * 1.6); // +60% peak
+  ok(forcedExits(st, T, fakeMarket, now0 + 1000).length === 0, "trailing stop stays quiet while the bag climbs");
+  prices.set("T", 0.0003 * 1.5); // -10 points from peak: still fine
+  ok(forcedExits(st, T, fakeMarket, now0 + 2000).length === 0, "small pullback from the peak is tolerated");
+  prices.set("T", 0.0003 * 1.4); // -20 points from peak: sell
+  ok(forcedExits(st, T, fakeMarket, now0 + 3000)[0]?.reason === "trailing-stop", "rolls over past the trail: trailing-stop fires");
+}
+
 // ---------------------------------------------------------------- full simulation
 section("3-hour simulation, 3 bots, simulated market");
 const market = new MockMarket(7);
