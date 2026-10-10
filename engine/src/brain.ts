@@ -94,13 +94,21 @@ export class ClaudeBrain implements Brain {
     return true;
   }
 
+  /** Set once a model rejects a forced tool_choice; from then on we don't send it. */
+  private noForcedTools = false;
+
   private async message(body: Record<string, unknown>): Promise<any> {
+    if (this.noForcedTools && body.tool_choice) {
+      const { tool_choice: _drop, ...rest } = body;
+      body = rest;
+    }
     try {
       return await this.post(body);
     } catch (e) {
       // Some models reject a forced tool_choice with HTTP 400. Ask again without forcing it:
       // the system prompt already says which tool to answer with.
-      if (body.tool_choice && /HTTP 400/.test((e as Error).message)) {
+      if (body.tool_choice && /HTTP 400/.test((e as Error).message) && /tool_choice/.test((e as Error).message)) {
+        this.noForcedTools = true;
         const { tool_choice: _drop, ...rest } = body;
         return this.post(rest);
       }
