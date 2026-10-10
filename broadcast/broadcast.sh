@@ -14,6 +14,7 @@ cd "$(dirname "$0")"
 WIDTH="${WIDTH:-1280}"
 HEIGHT="${HEIGHT:-720}"
 FPS="${FPS:-30}"
+PRESET="${PRESET:-veryfast}"         # x264 speed: ultrafast on a 2-core server, veryfast on 4+ cores
 VIDEO_BITRATE="${VIDEO_BITRATE:-3000k}"
 AUDIO="${AUDIO:-pulse}"               # pulse = real bot voices, none = silent (testing)
 DISPLAY_NUM="${DISPLAY_NUM:-99}"
@@ -77,7 +78,7 @@ echo "[broadcast] streaming ${WIDTH}x${HEIGHT}@${FPS} to ${OUTPUT:-Twitch}"
 ffmpeg -hide_banner -loglevel warning \
   -thread_queue_size 1024 -f x11grab -draw_mouse 0 -video_size "${WIDTH}x${HEIGHT}" -framerate "$FPS" -i "$DISPLAY" \
   "${AUDIO_IN[@]}" \
-  -c:v libx264 -preset veryfast -tune zerolatency -pix_fmt yuv420p \
+  -c:v libx264 -preset "$PRESET" -tune zerolatency -pix_fmt yuv420p \
   -b:v "$VIDEO_BITRATE" -maxrate "$VIDEO_BITRATE" -bufsize "$((${VIDEO_BITRATE%k} * 2))k" -g "$((FPS * 2))" \
   -c:a aac -b:a 160k -ar 44100 \
   ${MAX_SECONDS:+-t "$MAX_SECONDS"} \
