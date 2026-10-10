@@ -105,6 +105,7 @@ export interface Store {
   getBotSecret(botId: string): Promise<string | undefined>;
   getTv(): Promise<TvRow | undefined>;
   setTv(botId: string | null): Promise<void>;
+  setSolUsd(usd: number): Promise<void>;
   insertChat(row: { bot_id: string; viewer_id: string; username: string; text: string }): Promise<void>;
   /** New chat for ALL bots since an id (one query instead of one per bot). */
   newChatAll(afterId: number): Promise<ChatRow[]>;
@@ -184,6 +185,9 @@ export class SupabaseStore implements Store {
   }
   async setTv(botId: string | null) {
     await this.rest("POST", "tv_state?on_conflict=id", { id: 1, bot_id: botId, since: new Date().toISOString() }, "resolution=merge-duplicates,return=minimal");
+  }
+  async setSolUsd(usd: number) {
+    await this.rest("POST", "tv_state?on_conflict=id", { id: 1, sol_usd: usd }, "resolution=merge-duplicates,return=minimal");
   }
   async insertChat(row: { bot_id: string; viewer_id: string; username: string; text: string }) {
     await this.rest("POST", "chat_messages", row, "return=minimal");
@@ -331,6 +335,10 @@ export class MemoryStore implements Store {
   }
   async setTv(botId: string | null) {
     this.tv = { bot_id: botId, since: new Date().toISOString() };
+  }
+  solUsd = 0;
+  async setSolUsd(usd: number) {
+    this.solUsd = usd;
   }
   async insertChat(row: { bot_id: string; viewer_id: string; username: string; text: string }) {
     this.chat.push({ id: ++this.chatSeq, bot_id: row.bot_id, username: row.username, text: row.text, created_at: new Date().toISOString() });

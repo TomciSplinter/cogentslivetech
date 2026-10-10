@@ -3,6 +3,7 @@
 //   npm start        → live pump.fun data
 //   npm run demo     → simulated market (free, for testing)
 import { startApi } from "./api.ts";
+import { fetchSolUsd } from "./solprice.ts";
 import { createBrain } from "./brain.ts";
 import { config, describeConfig } from "./config.ts";
 import { BotManager } from "./manager.ts";
@@ -50,7 +51,7 @@ async function main() {
             progress: c.progress,
             created_at: new Date(c.createdAt).toISOString(),
             history: c.history.slice(-180),
-            candles: c.candles.slice(-160).map((k) => [k[0], +k[1].toFixed(3), +k[2].toFixed(3), +k[3].toFixed(3), +k[4].toFixed(3), +k[5].toFixed(3)] as [number, number, number, number, number, number]),
+            candles: c.candles.slice(-360).map((k) => [k[0], +k[1].toFixed(3), +k[2].toFixed(3), +k[3].toFixed(3), +k[4].toFixed(3), +k[5].toFixed(3)] as [number, number, number, number, number, number]),
             updated_at: nowIso,
           });
         }
@@ -60,6 +61,14 @@ async function main() {
       }
     }, 10_000),
   );
+
+  // SOL price in USD, so the website can show market caps in dollars
+  const pushSolUsd = async () => {
+    const usd = await fetchSolUsd();
+    if (usd) await store.setSolUsd(usd).catch((e) => log("solusd", "save failed:", (e as Error).message));
+  };
+  pushSolUsd();
+  timers.push(setInterval(pushSolUsd, 60_000));
 
   timers.push(setInterval(() => store.cleanup().catch((e) => log("store", "cleanup failed:", e.message)), 3600_000));
 

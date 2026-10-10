@@ -88,9 +88,9 @@ export function createDemoSource() {
   const utter = [];
   const chat = [];
   const timers = new Map();
-  let tv = { bot_id: "rohm", since: iso() };
+  let tv = { bot_id: "rohm", since: iso(), sol_usd: 182 };
 
-  const CANDLE = 15_000;
+  const CANDLE = 5_000;
   function pushTrade(c, t, mcap, vol) {
     const b = t - (t % CANDLE);
     const last = c.candles[c.candles.length - 1];
@@ -310,7 +310,7 @@ export function createDemoSource() {
 
   function rotateTv() {
     const candidates = [...bots.values()].filter((b) => !b.paused && b.id !== tv.bot_id);
-    if (candidates.length) tv = { bot_id: pick(candidates).id, since: iso() };
+    if (candidates.length) tv = { bot_id: pick(candidates).id, since: iso(), sol_usd: tv.sol_usd };
   }
 
   seedHistory();

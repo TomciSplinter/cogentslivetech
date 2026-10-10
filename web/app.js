@@ -63,6 +63,14 @@ function h(tag, attrs = {}, ...kids) {
 const num = (n, d = 2) => Number(n ?? 0).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
 const solDigits = (n) => (Math.abs(Number(n) || 0) >= 0.1 || !Number(n) ? 2 : 3);
 const sol = (n, d) => `${num(n, d ?? solDigits(n))} SOL`;
+// live SOL price in USD (from the engine); market caps show in dollars when known
+let solUsd = 0;
+const mcap = (v) => (solUsd ? fmtMcap(Number(v) * solUsd, "$") : `${fmtMcap(Number(v))} SOL`);
+async function refreshSolUsd() {
+  const tv = await source.getTv().catch(() => undefined);
+  const v = Number(tv?.sol_usd);
+  if (Number.isFinite(v) && v > 0) solUsd = v;
+}
 const signed = (n, d) => `${n >= 0 ? "+" : "−"}${num(Math.abs(n), d ?? solDigits(n))}`;
 const pct = (n, d = 1) => `${n >= 0 ? "+" : "−"}${num(Math.abs(n), d)}%`;
 const tone = (n) => (n > 0 ? "up" : n < 0 ? "down" : "flat");
@@ -1001,7 +1009,7 @@ function buildPlayer(bot, { tv = false, chat = false } = {}) {
   let lastChart = null;
   const draw = () => {
     if (!lastChart) return;
-    const tf = renderCandles(chartHost, lastChart.candles, { ...lastChart.opts, big: tv });
+    const tf = renderCandles(chartHost, lastChart.candles, { ...lastChart.opts, big: tv, usd: solUsd });
     tfChip.textContent = tf ? `${tf} candles` : "";
   };
   const ro = new ResizeObserver(draw);
@@ -1068,7 +1076,7 @@ function buildPlayer(bot, { tv = false, chat = false } = {}) {
         scrTitle.replaceChildren(
           h("b", {}, `$${coin.symbol}`),
           h("span", { class: `chip${position ? " chip-amber" : ""}` }, position ? "Holding" : "Watching"),
-          h("span", { class: "scr-mcap" }, `Market cap ${fmtMcap(Number(coin.mcap_sol))} SOL`),
+          h("span", { class: "scr-mcap" }, `Market cap ${mcap(coin.mcap_sol)}`),
           h("span", { class: "scr-chg" }, position ? "Position " : "10 min ", h("span", { class: tone(chg) }, pct(chg))),
         );
       } else {
@@ -1082,7 +1090,7 @@ function buildPlayer(bot, { tv = false, chat = false } = {}) {
           ...(movers ?? []).slice(0, 7).map((m) => {
             const spark = h("span", { class: "scan-spark" });
             const chg = changePct((m.candles ?? []).slice(-20));
-            const row = h("li", {}, h("b", {}, `$${m.symbol}`), h("span", { class: "muted" }, `${age(m.created_at)} old`), h("span", {}, `${fmtMcap(Number(m.mcap_sol))} SOL`), spark, h("span", { class: tone(chg) }, pct(chg)));
+            const row = h("li", {}, h("b", {}, `$${m.symbol}`), h("span", { class: "muted" }, `${age(m.created_at)} old`), h("span", {}, mcap(m.mcap_sol)), spark, h("span", { class: tone(chg) }, pct(chg)));
             requestAnimationFrame(() => m.candles?.length > 1 && renderCandles(spark, m.candles.slice(-30), { compact: true }));
             return row;
           }),
@@ -1941,4 +1949,5 @@ if (!source.live) {
     })
     .catch(() => {});
 }
-route();
+refreshSolUsd().finally(route);
+setInterval(refreshSolUsd, 60_000);

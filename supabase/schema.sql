@@ -54,6 +54,8 @@ create table if not exists public.tv_state (
   bot_id text references public.bots(id) on delete set null,
   since  timestamptz not null default now()
 );
+-- Live SOL price in USD (the engine updates it every minute; the website shows market caps in $)
+alter table public.tv_state add column if not exists sol_usd numeric;
 
 -- Open bags
 create table if not exists public.positions (

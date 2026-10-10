@@ -26,15 +26,15 @@ export interface Coin {
   lastTradeAt: number;
   trades: TradeEvent[]; // recent trades (last 15 min)
   history: [number, number][]; // [timeMs, priceSol] samples for charts
-  candles: Candle[]; // 15-second OHLC candles in market cap (SOL), built from every trade
+  candles: Candle[]; // 5-second OHLC candles in market cap (SOL), built from every trade
   devSold: boolean;
   migrated: boolean;
 }
 
 /** [bucket start ms, open, high, low, close, volume SOL]; prices are market cap in SOL. */
 export type Candle = [number, number, number, number, number, number];
-export const CANDLE_MS = 15_000;
-const MAX_CANDLES = 240; // one hour
+export const CANDLE_MS = 5_000;
+const MAX_CANDLES = 720; // one hour
 
 function addToCandles(c: Coin, t: number, mcap: number, volSol: number) {
   const bucket = t - (t % CANDLE_MS);

@@ -1,29 +1,27 @@
 // Candlestick chart (green/red candles, volume, price line, entry line, buy/sell marks).
-// Input candles: [bucketStartMs, open, high, low, close, volumeSol] at 15-second resolution,
-// prices are market cap in SOL. Rendered as crisp SVG at the host's exact pixel size.
+// Input candles: [bucketStartMs, open, high, low, close, volumeSol] at 5-second resolution,
+// prices are market cap in SOL (shown in USD when a SOL price is given). Rendered as crisp SVG
+// at the host's exact pixel size.
 
 export const UP = "#3ddc97";
 export const DOWN = "#ff5c7a";
 const AMBER = "#7fdcff";
-const BASE_MS = 15_000;
+const BASE_MS = 5_000;
 const FRAMES = [
-  [1, "15s"],
-  [2, "30s"],
-  [4, "1m"],
-  [8, "2m"],
-  [20, "5m"],
+  [1, "5s"],
+  [3, "15s"],
+  [6, "30s"],
+  [12, "1m"],
+  [24, "2m"],
+  [60, "5m"],
 ];
 
-/** Merge 15s candles into bigger ones until they fit `maxBars`. */
-export function aggregate(candles, maxBars) {
-  let pick = FRAMES[FRAMES.length - 1];
-  for (const f of FRAMES) {
-    const span = candles.length ? (candles[candles.length - 1][0] - candles[0][0]) / (BASE_MS * f[0]) + 1 : 0;
-    if (span <= maxBars) {
-      pick = f;
-      break;
-    }
-  }
+/**
+ * Pick a timeframe and merge the 5s candles into it. The chart is a live tape, so it stays on
+ * 5s candles and shows the most recent `maxBars` of them; pass `frame` ("15s", "1m", ...) to zoom out.
+ */
+export function aggregate(candles, maxBars, frame = "5s") {
+  const pick = FRAMES.find((f) => f[1] === frame) ?? FRAMES[0];
   const ms = BASE_MS * pick[0];
   const out = [];
   for (const k of candles) {
@@ -39,9 +37,11 @@ export function aggregate(candles, maxBars) {
   return { bars: out.slice(-maxBars), tf: pick[1], ms };
 }
 
-export function fmtMcap(v) {
+export function fmtMcap(v, prefix = "") {
   if (!Number.isFinite(v)) return "–";
-  if (v >= 10000) return `${(v / 1000).toFixed(0)}K`;
+  if (v >= 1e6) return `${prefix}${(v / 1e6).toFixed(2)}M`;
+  if (prefix) return prefix + fmtMcap(v);
+  if (v >= 100000) return `${(v / 1000).toFixed(0)}K`;
   if (v >= 1000) return `${(v / 1000).toFixed(1)}K`;
   if (v >= 100) return v.toFixed(0);
   if (v >= 10) return v.toFixed(1);
@@ -67,10 +67,17 @@ function niceTicks(lo, hi, count) {
   return out;
 }
 /** Axis label for a tick: as many decimals as the step needs, no more. */
-function tickLabel(v, step) {
-  if (v >= 1000) return fmtMcap(v);
+function tickLabel(v, step, prefix = "") {
+  if (v >= 1e6) {
+    const d = step >= 1e6 ? 0 : step >= 1e5 ? 1 : 2;
+    return `${prefix}${(v / 1e6).toFixed(d)}M`;
+  }
+  if (v >= 1000) {
+    const d = step >= 1000 ? 0 : step >= 100 ? 1 : 2;
+    return `${prefix}${(v / 1000).toFixed(d)}K`;
+  }
   const d = step >= 1 ? 0 : step >= 0.1 ? 1 : 2;
-  return v.toFixed(d);
+  return prefix + v.toFixed(d);
 }
 
 /**
@@ -78,9 +85,16 @@ function tickLabel(v, step) {
  *   entry  – market cap where the bot bought (dashed line)
  *   marks  – [{ t: ms, side: "buy" | "sell" }] trade markers
  *   compact – smaller labels for thumbnails
+ *   usd    – SOL price in USD; when given, the axis shows dollar market caps
+ *   frame  – timeframe label to zoom out to ("15s", "1m", ...), default 5s
  * Returns the timeframe label (e.g. "1m").
  */
-export function renderCandles(host, candles, { entry, marks = [], compact = false, big = false } = {}) {
+export function renderCandles(host, candles, { entry, marks = [], compact = false, big = false, usd = 0, frame = "5s" } = {}) {
+  const prefix = usd ? "$" : "";
+  if (usd) {
+    candles = candles.map((k) => [k[0], k[1] * usd, k[2] * usd, k[3] * usd, k[4] * usd, k[5]]);
+    if (entry) entry *= usd;
+  }
   const W = Math.round(host.clientWidth);
   const H = Math.round(host.clientHeight);
   if (!W || !H || !candles?.length) {
@@ -100,7 +114,7 @@ export function renderCandles(host, candles, { entry, marks = [], compact = fals
   const rightPad = compact ? 0 : 3;
   const barPx = compact ? 6 : plotW < 400 ? 8 : 11;
   const maxBars = Math.max(10, Math.floor(plotW / barPx) - rightPad);
-  const { bars, tf, ms } = aggregate(candles, maxBars);
+  const { bars, tf, ms } = aggregate(candles, maxBars, frame);
   const slots = Math.max(bars.length + rightPad, Math.ceil(plotW / (compact ? 12 : 22)));
 
   let lo = Infinity;
@@ -136,7 +150,7 @@ export function renderCandles(host, candles, { entry, marks = [], compact = fals
     const y = r(Y(v));
     if (y < plotTop - 1 || y > plotTop + plotH + 1) continue;
     parts.push(`<line x1="0" x2="${plotW}" y1="${y}" y2="${y}" class="cg-grid"/>`);
-    if (!compact && Math.abs(y - ly) > tagH * 0.8 && (entryY == null || Math.abs(y - entryY) > tagH * 0.8)) parts.push(`<text x="${W - 12}" y="${y + fs / 3}" class="cg-axis" style="font-size:${fs}px" text-anchor="end">${tickLabel(v, ticks.step)}</text>`);
+    if (!compact && Math.abs(y - ly) > tagH * 0.8 && (entryY == null || Math.abs(y - entryY) > tagH * 0.8)) parts.push(`<text x="${W - 12}" y="${y + fs / 3}" class="cg-axis" style="font-size:${fs}px" text-anchor="end">${tickLabel(v, ticks.step, prefix)}</text>`);
   }
   // time labels on whole minutes only (HH:MM), spaced so they never overlap
   if (!compact) {
@@ -166,7 +180,7 @@ export function renderCandles(host, candles, { entry, marks = [], compact = fals
     parts.push(`<line x1="0" x2="${plotW}" y1="${entryY}" y2="${entryY}" class="cg-entry"/>`);
     if (!compact && Math.abs(entryY - ly) >= tagH) {
       parts.push(`<rect x="${plotW + 4}" y="${entryY - tagH / 2}" width="${axisW - 12}" height="${tagH}" rx="4" fill="${AMBER}"/>`);
-      parts.push(`<text x="${W - 14}" y="${entryY + fs / 3}" class="cg-tag cg-tag-dark" style="font-size:${fs}px" text-anchor="end">${fmtMcap(entry)}</text>`);
+      parts.push(`<text x="${W - 14}" y="${entryY + fs / 3}" class="cg-tag cg-tag-dark" style="font-size:${fs}px" text-anchor="end">${fmtMcap(entry, prefix)}</text>`);
     }
   }
   // buy / sell marks
@@ -186,7 +200,7 @@ export function renderCandles(host, candles, { entry, marks = [], compact = fals
   parts.push(`<line x1="0" x2="${plotW}" y1="${ly}" y2="${ly}" stroke="${lastCol}" stroke-width="1" stroke-dasharray="2 3" opacity=".8"/>`);
   if (!compact) {
     parts.push(`<rect x="${plotW + 4}" y="${ly - tagH / 2}" width="${axisW - 12}" height="${tagH}" rx="4" fill="${lastCol}"/>`);
-    parts.push(`<text x="${W - 14}" y="${ly + fs / 3}" class="cg-tag cg-tag-dark" style="font-size:${fs}px" text-anchor="end">${fmtMcap(last[4])}</text>`);
+    parts.push(`<text x="${W - 14}" y="${ly + fs / 3}" class="cg-tag cg-tag-dark" style="font-size:${fs}px" text-anchor="end">${fmtMcap(last[4], prefix)}</text>`);
   }
   // separator above volume
   parts.push(`<line x1="0" x2="${plotW}" y1="${r(volTop)}" y2="${r(volTop)}" class="cg-grid"/>`);

@@ -159,7 +159,7 @@ ok(withCandles.length > 0, "coins build candles from their trades");
 ok(withCandles.every((c) => c.candles.every(([, o, hi, lo, cl, v]) => hi >= Math.max(o, cl) - 1e-9 && lo <= Math.min(o, cl) + 1e-9 && v >= 0)), "every candle: high >= open/close >= low, volume >= 0");
 ok(withCandles.every((c) => c.candles.every((k, i) => k[0] % CANDLE_MS === 0 && (i === 0 || k[0] > c.candles[i - 1][0]))), "candles sit in 15-second buckets, oldest first");
 ok(withCandles.every((c) => c.candles.every((k, i) => i === 0 || Math.abs(k[1] - c.candles[i - 1][4]) < 1e-9)), "each candle opens at the previous close");
-ok(withCandles.every((c) => c.candles.length <= 240), "candle history is capped at one hour");
+ok(withCandles.every((c) => c.candles.length <= 720), "candle history is capped at one hour");
 ok(withCandles.every((c) => Math.abs(c.candles[c.candles.length - 1][4] - c.mcapSol) < 1e-9), "last close is the live market cap");
 
 // ---------------------------------------------------------------- chat

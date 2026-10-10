@@ -41,7 +41,7 @@ return, and Cogents TV broadcasts the most interesting bot to Twitch 24/7.
 | `web/config.js` | Supabase URL + publishable key. Empty = built-in demo mode. |
 | `web/mind.js` | The 3D minds (WebGL), with a flat fallback for old devices. |
 | `web/fonts/` | Bricolage Grotesque (headlines and text) and Geist Mono (numbers), self-hosted under the SIL Open Font License (`OFL-Bricolage.txt`, `OFL.txt`). |
-| `web/chart.js` | Green/red candlestick charts (15-second candles from the engine, merged to 30s–5m to fit). |
+| `web/chart.js` | Green/red candlestick charts (5-second candles from the engine, market caps in USD from the live SOL price). |
 | `web/img/` | Banner art, AI-upscaled 4x and cut into sizes: `hero-*.avif/.jpg` (desktop, up to 5040px wide), `hero-phone-*` (phones, up to 1800px), `stream-shot.*` (the picture on How it works). To change the artwork, replace these files with the same names and sizes. |
 | `supabase/schema.sql` | Database tables, security rules, realtime and storage bucket. |
 | `broadcast/` | The Twitch broadcaster: `setup.sh` installs it, `broadcast.sh` runs it. |

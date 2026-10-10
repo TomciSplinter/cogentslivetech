@@ -65,7 +65,7 @@ export function createSupabaseSource(url, key, apiUrl) {
       return rows(await sb.from("coins").select("mint,symbol,name,mcap_sol,price_sol,progress,created_at,candles,updated_at").eq("mint", mint).limit(1))[0];
     },
     async getTv() {
-      return rows(await sb.from("tv_state").select("bot_id,since").eq("id", 1).limit(1))[0];
+      return rows(await sb.from("tv_state").select("bot_id,since,sol_usd").eq("id", 1).limit(1))[0];
     },
     subscribe({ onUtterance, onChat, onTrade, onBot }) {
       const ch = sb
