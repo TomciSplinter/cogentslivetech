@@ -20,6 +20,15 @@ AUDIO="${AUDIO:-pulse}"               # pulse = real bot voices, none = silent (
 DISPLAY_NUM="${DISPLAY_NUM:-99}"
 CHROME="${CHROME_BIN:-$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)}"
 INGEST="${TWITCH_INGEST:-rtmp://live.twitch.tv/app}"
+# No GPU on a server. "cpu" composites the page with Chrome's fast CPU rasterizer and uses
+# SwiftShader only for the WebGL minds (smooth). "swiftshader" runs the whole page through
+# SwiftShader on one thread (1-2 fps on most servers), kept for comparison.
+GPU_MODE="${GPU_MODE:-cpu}"
+if [ "$GPU_MODE" = "swiftshader" ]; then
+  GPU_FLAGS="--ignore-gpu-blocklist --enable-unsafe-swiftshader --use-gl=angle --use-angle=swiftshader"
+else
+  GPU_FLAGS="--disable-gpu-compositing --enable-unsafe-swiftshader --ignore-gpu-blocklist --disable-gpu-vsync"
+fi
 OUTPUT="${OUTPUT:-}"                   # set to a file path to record locally instead of streaming
 
 if [ -z "${TV_URL:-}" ]; then echo "TV_URL is missing in .env (e.g. https://cogents.live/?sound&quality=0.4&fps=20#/tv)"; exit 1; fi
@@ -63,7 +72,7 @@ fi
   --no-first-run --no-default-browser-check --disable-infobars --noerrdialogs \
   --disable-session-crashed-bubble --disable-features=Translate,MediaRouter \
   --autoplay-policy=no-user-gesture-required \
-  --ignore-gpu-blocklist --enable-unsafe-swiftshader --use-gl=angle --use-angle=swiftshader \
+  $GPU_FLAGS \
   --window-position=0,0 --window-size="${WIDTH},${HEIGHT}" --kiosk \
   ${CHROME_EXTRA_FLAGS:-} \
   "$TV_URL" >/dev/null 2>&1 &
