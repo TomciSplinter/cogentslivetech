@@ -3,6 +3,10 @@ import { fetchT } from "./util.ts";
 
 const SOL_MINT = "So11111111111111111111111111111111111111112";
 
+let lastSolUsd = 0;
+/** Last SOL/USD price fetched (0 until the first fetch). */
+export const solUsdNow = () => lastSolUsd;
+
 export async function fetchSolUsd(): Promise<number | undefined> {
   const sources: (() => Promise<number>)[] = [
     async () => {
@@ -19,7 +23,10 @@ export async function fetchSolUsd(): Promise<number | undefined> {
   for (const get of sources) {
     try {
       const v = await get();
-      if (Number.isFinite(v) && v > 1 && v < 100000) return v;
+      if (Number.isFinite(v) && v > 1 && v < 100000) {
+        lastSolUsd = v;
+        return v;
+      }
     } catch {}
   }
   return undefined;

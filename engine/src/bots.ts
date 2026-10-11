@@ -2,6 +2,7 @@
 //
 // Limits are enforced by code (see risk.ts). The AI can never go past them,
 // no matter what it decides, what chat tells it, or what its creator wrote.
+import { solUsdNow } from "./solprice.ts";
 
 export interface Limits {
   /** Max SOL per single buy. */
@@ -48,6 +49,9 @@ export interface EntryFilter {
   curveMin?: number; // bonding curve progress window, percent
   curveMax?: number;
   maxLastTradeSec?: number; // skip coins that went quiet
+  minMcapUsd?: number; // market-cap window in US dollars (converted at the live SOL price)
+  maxMcapUsd?: number;
+  minVol5mSol?: number; // at least this much SOL traded in the last 5 minutes
 }
 
 export interface Preset {
@@ -86,8 +90,16 @@ export interface BotDef {
 const base = { minBuySol: 0.01, reserveSol: 0.02 };
 
 /** Does a coin pass a preset's entry filter? Returns the first failing rule, or null when it passes. */
-export function entryFails(c: { uniqueBuyers5m: number; buys5m: number; sells5m: number; change5mPct: number; devSold: boolean; curvePct: number; lastTradeAgoSec: number }, f?: EntryFilter): string | null {
+export function entryFails(
+  c: { uniqueBuyers5m: number; buys5m: number; sells5m: number; change5mPct: number; devSold: boolean; curvePct: number; lastTradeAgoSec: number; mcapSol?: number; vol5mSol?: number },
+  f?: EntryFilter,
+  solUsd = solUsdNow() || 180,
+): string | null {
   if (!f) return null;
+  const mcapUsd = (c.mcapSol ?? 0) * solUsd;
+  if (f.minMcapUsd != null && mcapUsd < f.minMcapUsd) return `market cap $${Math.round(mcapUsd / 100) / 10}k is below $${f.minMcapUsd / 1000}k`;
+  if (f.maxMcapUsd != null && mcapUsd > f.maxMcapUsd) return `market cap $${Math.round(mcapUsd / 100) / 10}k is above $${f.maxMcapUsd / 1000}k`;
+  if (f.minVol5mSol != null && (c.vol5mSol ?? 0) < f.minVol5mSol) return `only ${c.vol5mSol ?? 0} SOL traded in 5m`;
   if (f.noDevSold && c.devSold) return "dev sold";
   if (f.minUniqueBuyers != null && c.uniqueBuyers5m < f.minUniqueBuyers) return `only ${c.uniqueBuyers5m} unique buyers`;
   if (f.minBuySellRatio != null && c.buys5m / Math.max(1, c.sells5m) < f.minBuySellRatio) return "sellers outweigh buyers";
@@ -130,9 +142,9 @@ export const PRESETS: Record<PresetId, Preset> = {
     style: "You care about the numbers: dev wallet behaviour, buyer count, buy/sell ratio, volume, age. You hate rugs, are slow to buy, and always explain why.",
     limits: { ...base, maxBuySol: 0.3, maxBuyPct: 15, dailySpendSol: 4, dailyTrades: 70, buyCooldownSec: 600, maxPositions: 2, takeProfitPct: 90, stopLossPct: 20, maxHoldMin: 60, maxCoinAgeMin: 90, trailArmPct: 25, trailDropPct: 12 },
     strategy: "both",
-    entry: { noDevSold: true, minUniqueBuyers: 10, minBuySellRatio: 1.3, maxChange5mPct: 60, minChange5mPct: -25, curveMin: 8, curveMax: 85, maxLastTradeSec: 60 },
+    entry: { noDevSold: true, minUniqueBuyers: 10, minBuySellRatio: 1.3, maxChange5mPct: 60, minChange5mPct: -25, curveMin: 8, curveMax: 85, maxLastTradeSec: 60, minMcapUsd: 10_000, maxMcapUsd: 25_000, minVol5mSol: 3 },
     playbook:
-      "Only coins with real, growing demand make your menu (10+ unique buyers, more buys than sells, not already pumped, not dumping, curve between 8% and 85%). Prefer the ones where unique buyers keep rising and smart money is also in. Buy pullbacks, not green candles. Most turns you hold, and that is correct.",
+      "Only coins with real, growing demand make your menu: market cap between $10k and $25k, at least a few SOL of volume in 5 minutes, 10+ unique buyers, more buys than sells, not already pumped, not dumping, curve between 8% and 85%. Prefer the ones where unique buyers keep rising and smart money is also in. Buy pullbacks, not green candles. Most turns you hold, and that is correct.",
   },
   diamond: {
     id: "diamond",

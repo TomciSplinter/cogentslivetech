@@ -100,6 +100,7 @@ export interface CoinStats {
   smartNetSol10m: number;
   smartLastBuyAgoSec?: number;
   smartWallets?: string[];
+  smartSignalWallet?: string; // the followed wallet whose buy is the freshest signal
 }
 
 export type TickListener = (coin: Coin, now: number) => void;
@@ -185,6 +186,10 @@ export abstract class Market {
       const st = this.smartStats(c, now, windowMs);
       if (!st.buyers.size || st.sellers.size >= st.buyers.size && st.net <= 0) continue;
       if (!st.lastBuy) continue;
+      // flippers: a wallet that already sold this coin in the last 5 minutes is scalping it, not holding it
+      const recentSellers = new Set(c.smart.filter((t) => t.side === "sell" && now - t.t < 5 * 60_000).map((t) => t.wallet));
+      const holders = [...st.buyers].filter((w) => !recentSellers.has(w));
+      if (!holders.length) continue;
       out.push(this.stats(c, now));
     }
     out.sort((a, b) => b.smartBuyers10m - a.smartBuyers10m || (a.smartLastBuyAgoSec ?? 1e9) - (b.smartLastBuyAgoSec ?? 1e9));
@@ -261,6 +266,7 @@ export abstract class Market {
       smartNetSol10m: round(st.net, 3),
       smartLastBuyAgoSec: st.lastBuy ? Math.round((now - st.lastBuy.t) / 1000) : undefined,
       smartWallets: [...st.buyers].slice(0, 3).map((w) => `${w.slice(0, 4)}…${w.slice(-4)}`),
+      smartSignalWallet: st.lastBuy?.wallet,
     };
   }
 

@@ -282,7 +282,8 @@ export class Bot {
       if (d.action === "buy") {
         const check = checkBuy(this.state, this.def.limits, d.mint, d.sol, new Set(menu.map((c) => c.mint)), now);
         if (check.ok) {
-          const ok = await this.buy(d.mint!, check.sol, now);
+          const picked = menu.find((c) => c.mint === d.mint);
+          const ok = await this.buy(d.mint!, check.sol, now, picked?.smartBuyers10m ? picked.smartSignalWallet : undefined);
           if (!ok) note = "buy failed";
         } else {
           note = `buy blocked: ${check.reason}`;
@@ -312,7 +313,7 @@ export class Bot {
     }
   }
 
-  private async buy(mint: string, sol: number, now: number): Promise<boolean> {
+  private async buy(mint: string, sol: number, now: number, signalWallet?: string): Promise<boolean> {
     const coin = this.market.getCoin(mint);
     try {
       const r = await this.exec.buy(mint, sol);
@@ -322,7 +323,7 @@ export class Bot {
       this.stats.volume += r.solSpent;
       if (this.exec.mode === "real") this.state.solBalance = (await this.exec.syncBalance()) ?? this.state.solBalance;
       await this.store.upsertPosition({ bot_id: this.def.id, mint, symbol: p.symbol, tokens: p.tokens, cost_sol: p.costSol, entry_price: p.entryPrice, opened_at: new Date(now).toISOString() });
-      await this.store.insertTrade({ bot_id: this.def.id, mint, symbol: p.symbol, side: "buy", sol: r.solSpent, tokens: r.tokens, price: r.price, tx: r.tx ?? null, mode: this.exec.mode, reason: "ai" });
+      await this.store.insertTrade({ bot_id: this.def.id, mint, symbol: p.symbol, side: "buy", sol: r.solSpent, tokens: r.tokens, price: r.price, tx: r.tx ?? null, mode: this.exec.mode, reason: signalWallet ? `smart:${signalWallet}` : "ai" });
       pushFloor(this.def.id, `${this.def.name} bought ${p.symbol} for ${r.solSpent.toFixed(3)} SOL`, now);
       this.market.setHeld(this.heldMints());
       log(this.def.id, `BUY ${p.symbol} ${r.solSpent.toFixed(4)} SOL`);

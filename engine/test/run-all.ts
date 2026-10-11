@@ -189,11 +189,14 @@ section("smart money: followed wallets feed the copy-trader's menu and exits");
 // entry filters are code-enforced
 {
   const { entryFails, PRESETS } = await import("../src/bots.ts");
-  const good = { uniqueBuyers5m: 12, buys5m: 20, sells5m: 8, change5mPct: 20, devSold: false, curvePct: 30, lastTradeAgoSec: 5 };
-  ok(entryFails(good, PRESETS.analyst.entry) === null, "a healthy coin passes the analyst's filter");
-  ok(entryFails({ ...good, devSold: true }, PRESETS.analyst.entry) === "dev sold", "dev sold fails");
-  ok(entryFails({ ...good, change5mPct: 120 }, PRESETS.analyst.entry)?.startsWith("already up") === true, "pumped coin fails (no chasing)");
-  ok(entryFails({ ...good, uniqueBuyers5m: 3 }, PRESETS.analyst.entry)?.includes("unique buyers") === true, "thin demand fails");
+  const good = { uniqueBuyers5m: 12, buys5m: 20, sells5m: 8, change5mPct: 20, devSold: false, curvePct: 30, lastTradeAgoSec: 5, mcapSol: 90, vol5mSol: 6 };
+  ok(entryFails(good, PRESETS.analyst.entry, 180) === null, "a healthy coin passes the analyst's filter");
+  ok(entryFails({ ...good, mcapSol: 25 }, PRESETS.analyst.entry, 180)?.includes("below") === true, "a $4.5k coin is too small for the analyst");
+  ok(entryFails({ ...good, mcapSol: 200 }, PRESETS.analyst.entry, 180)?.includes("above") === true, "a $36k coin is too big for the analyst");
+  ok(entryFails({ ...good, vol5mSol: 1 }, PRESETS.analyst.entry, 180)?.includes("traded") === true, "thin volume fails");
+  ok(entryFails({ ...good, devSold: true }, PRESETS.analyst.entry, 180) === "dev sold", "dev sold fails");
+  ok(entryFails({ ...good, change5mPct: 120 }, PRESETS.analyst.entry, 180)?.startsWith("already up") === true, "pumped coin fails (no chasing)");
+  ok(entryFails({ ...good, uniqueBuyers5m: 3 }, PRESETS.analyst.entry, 180)?.includes("unique buyers") === true, "thin demand fails");
   ok(entryFails({ ...good, uniqueBuyers5m: 3 }, PRESETS.degen.entry) !== null && entryFails({ ...good, uniqueBuyers5m: 4 }, PRESETS.degen.entry) === null, "degen's filter is looser but real");
 }
 

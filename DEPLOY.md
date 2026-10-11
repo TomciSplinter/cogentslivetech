@@ -204,7 +204,7 @@ Now **Create** on your site works: people connect Phantom or Solflare, sign a me
 VEGA follows the wallets listed in `engine/smart-wallets.txt` (one address per line). The engine watches them
 on-chain through your Solana RPC websocket (Helius), reads every swap they make on any DEX, puts the coins they
 buy on VEGA's menu within seconds, and sells when they sell. To change the list: edit the file (or set `SMART_WALLETS=addr1,addr2` in `.env`), then `pm2 restart cogents`.
-`npm run check-keys` shows how many wallets are followed. Coins with smart money show a gold **Smart money ×N**
+`npm run check-keys` shows how many wallets are followed, and `npm run wallets` prints a scorecard per wallet (how the bots did when they copied it), so you can prune the list with numbers. Coins with smart money show a gold **Smart money ×N**
 badge on the site. Each followed wallet costs one RPC websocket subscription plus one `getTransaction` per trade they make.
 
 ### Engine commands

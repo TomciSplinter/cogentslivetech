@@ -13,6 +13,7 @@
     "test": "node test/run-all.ts && node test/real-money.ts",
     "new-wallet": "node scripts/new-wallet.ts",
     "check-keys": "node scripts/check-keys.ts",
-    "export-key": "node scripts/export-key.ts"
+    "export-key": "node scripts/export-key.ts",
+    "wallets": "node scripts/wallets.ts"
   }
 }
