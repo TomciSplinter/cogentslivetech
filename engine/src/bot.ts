@@ -162,8 +162,22 @@ export class Bot {
     // first seen through its trade has no crowd stats yet
     const f = this.def.entry;
     const light = f && { noDevSold: f.noDevSold, maxChange5mPct: f.maxChange5mPct, curveMax: f.curveMax };
-    return list.filter((c) => !entryFails(c, c.smartBuyers10m > c.smartSellers10m ? light : f)).slice(0, 8);
+    const why: string[] = [];
+    const menu = list
+      .filter((c) => {
+        const fail = entryFails(c, c.smartBuyers10m > c.smartSellers10m ? light : f);
+        if (fail && why.length < 5) why.push(`${c.symbol}: ${fail}`);
+        return !fail;
+      })
+      .slice(0, 8);
+    // real money and nothing to pick from: say what the market looked like, so an idle bot can be tuned
+    if (!menu.length && this.exec.mode === "real" && now - this.lastMenuLog > 5 * 60_000) {
+      this.lastMenuLog = now;
+      log(this.def.id, list.length ? `empty menu; nearest misses: ${why.join(" | ")}` : "empty menu: no live coins to look at");
+    }
+    return menu;
   }
+  private lastMenuLog = 0;
 
   private context(now: number, menu = this.menu(now)): TurnContext {
     const s = this.state;
