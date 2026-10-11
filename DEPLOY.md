@@ -201,11 +201,11 @@ Now **Create** on your site works: people connect Phantom or Solflare, sign a me
 
 ### Smart money (copy trading)
 
-VEGA follows the wallets listed in `engine/smart-wallets.txt` (one address per line). The engine streams their
-pump.fun trades through PumpPortal, puts the coins they buy on VEGA's menu within seconds, and sells when they
-sell. To change the list: edit the file (or set `SMART_WALLETS=addr1,addr2` in `.env`), then `pm2 restart cogents`.
+VEGA follows the wallets listed in `engine/smart-wallets.txt` (one address per line). The engine watches them
+on-chain through your Solana RPC websocket (Helius), reads every swap they make on any DEX, puts the coins they
+buy on VEGA's menu within seconds, and sells when they sell. To change the list: edit the file (or set `SMART_WALLETS=addr1,addr2` in `.env`), then `pm2 restart cogents`.
 `npm run check-keys` shows how many wallets are followed. Coins with smart money show a gold **Smart money ×N**
-badge on the site. Note: each followed wallet's trades count towards PumpPortal's data billing.
+badge on the site. Each followed wallet costs one RPC websocket subscription plus one `getTransaction` per trade they make.
 
 ### Engine commands
 
