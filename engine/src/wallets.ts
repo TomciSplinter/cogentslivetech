@@ -9,6 +9,13 @@ import { log } from "./util.ts";
 const WSOL = "So11111111111111111111111111111111111111112";
 /** Smallest SOL leg that counts as a trade (token-account rent alone is ~0.002 SOL). */
 const MIN_SWAP_SOL = 0.01;
+const TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+const TOKEN_2022 = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
+/** Gap between transaction reads (~6/s), how long a signature may wait, and the queue cap. */
+const READ_GAP_MS = 160;
+const STALE_MS = 90_000;
+const MAX_QUEUE = 150;
+const RATE_LIMIT_PAUSE_MS = 2000;
 
 export interface WalletSwap {
   signature: string;
@@ -129,7 +136,11 @@ export class WalletWatcher {
       if (this.seen.has(v.signature)) return;
       this.seen.add(v.signature);
       if (this.seen.size > 5000) this.seen.delete(this.seen.values().next().value!);
-      this.handle(v.signature, w).catch((err) => log("wallets", "tx read failed:", (err as Error).message));
+      // a swap always moves SPL tokens; anything without the token program in its logs is a plain SOL
+      // transfer, a vote or a program call, not worth an RPC read
+      const logs: string[] = Array.isArray(v.logs) ? v.logs : [];
+      if (logs.length && !logs.some((l) => l.includes(TOKEN_PROGRAM) || l.includes(TOKEN_2022))) return;
+      this.enqueue(v.signature, w);
     };
     ws.onclose = () => {
       clearInterval(this.ping);
@@ -141,11 +152,50 @@ export class WalletWatcher {
     ws.onerror = () => {};
   }
 
+  // Transaction reads go through one queue, spaced out, so a burst from 20+ wallets can't trip the
+  // RPC's rate limit (HTTP 429), which would also throttle the bots' own real trades on the same key.
+  private queue: { signature: string; wallet: string; t: number }[] = [];
+  private draining = false;
+  private lastLimitLog = 0;
+
+  private enqueue(signature: string, wallet: string) {
+    this.queue.push({ signature, wallet, t: Date.now() });
+    if (this.queue.length > MAX_QUEUE) this.queue.splice(0, this.queue.length - MAX_QUEUE); // keep the newest
+    if (!this.draining) this.drain().catch(() => {});
+  }
+
+  private async drain() {
+    this.draining = true;
+    try {
+      while (this.queue.length && !this.stopped) {
+        const job = this.queue.shift()!;
+        if (Date.now() - job.t > STALE_MS) continue; // too old to copy anyway
+        await this.handle(job.signature, job.wallet).catch((err) => this.logFailure((err as Error).message));
+        await sleep(READ_GAP_MS);
+      }
+    } finally {
+      this.draining = false;
+    }
+  }
+
+  private logFailure(msg: string) {
+    if (/429/.test(msg)) {
+      if (Date.now() - this.lastLimitLog < 60_000) return;
+      this.lastLimitLog = Date.now();
+      log("wallets", `RPC rate limit hit (HTTP 429); reads are being spaced out, ${this.queue.length} waiting`);
+    } else log("wallets", "tx read failed:", msg);
+  }
+
   private async handle(signature: string, wallet: string) {
     let tx: any = null;
     for (let i = 0; i < 4 && !tx; i++) {
-      if (i) await new Promise((r) => setTimeout(r, 1500 * i));
-      tx = await this.rpc.call("getTransaction", [signature, { encoding: "jsonParsed", commitment: "confirmed", maxSupportedTransactionVersion: 1 }]);
+      if (i) await sleep(1500 * i);
+      try {
+        tx = await this.rpc.call("getTransaction", [signature, { encoding: "jsonParsed", commitment: "confirmed", maxSupportedTransactionVersion: 1 }]);
+      } catch (err) {
+        if (!/429/.test((err as Error).message) || i === 3) throw err;
+        await sleep(RATE_LIMIT_PAUSE_MS * (i + 1)); // back off, then try again
+      }
     }
     if (!tx) return;
     const t = tx.blockTime ? tx.blockTime * 1000 : Date.now();
@@ -153,6 +203,8 @@ export class WalletWatcher {
     if (swap) this.onSwap(swap);
   }
 }
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** One-off check used by check-keys: can we open the RPC websocket and subscribe? */
 export async function probeWalletStream(rpcUrl: string, wallet: string): Promise<string> {
