@@ -174,7 +174,7 @@ ok(withCandles.length > 0, "coins build candles from their trades");
 ok(withCandles.every((c) => c.candles.every(([, o, hi, lo, cl, v]) => hi >= Math.max(o, cl) - 1e-9 && lo <= Math.min(o, cl) + 1e-9 && v >= 0)), "every candle: high >= open/close >= low, volume >= 0");
 ok(withCandles.every((c) => c.candles.every((k, i) => k[0] % CANDLE_MS === 0 && (i === 0 || k[0] > c.candles[i - 1][0]))), "candles sit in 15-second buckets, oldest first");
 ok(withCandles.every((c) => c.candles.every((k, i) => i === 0 || Math.abs(k[1] - c.candles[i - 1][4]) < 1e-9)), "each candle opens at the previous close");
-ok(withCandles.every((c) => c.candles.length <= 720), "candle history is capped at one hour");
+ok(withCandles.every((c) => c.candles.length <= 1800), "candle history is capped at 30 minutes");
 ok(withCandles.every((c) => Math.abs(c.candles[c.candles.length - 1][4] - c.mcapSol) < 1e-9), "last close is the live market cap");
 
 // ---------------------------------------------------------------- chat
@@ -302,8 +302,46 @@ const market3 = new MockMarket(11);
 market3.step(Date.now());
 const mgr = new BotManager(market3, new MockBrain(), store3);
 await mgr.load();
-const api = startApi(mgr, () => ({}));
+const api = startApi(mgr, () => ({}), market3);
 await new Promise((r) => setTimeout(r, 200));
+
+// live chart feed: history on connect, then a tick after a trade
+{
+  for (let i = 1; i <= 5; i++) market3.step(Date.now() + i * 1000); // make sure there are candles
+  const mint = [...market3.coins.values()].find((c) => c.candles.length && !c.migrated)!.mint;
+  const ctrl = new AbortController();
+  const res = await fetch(`http://127.0.0.1:18787/api/live?mint=${mint}`, { signal: ctrl.signal });
+  ok(res.status === 200 && res.headers.get("content-type")?.startsWith("text/event-stream") === true, "live feed answers as an event stream");
+  const reader = res.body!.getReader();
+  const dec = new TextDecoder();
+  let buf = "";
+  (async () => {
+    for (;;) {
+      const { value, done } = await reader.read().catch(() => ({ value: undefined, done: true }));
+      if (done) break;
+      buf += dec.decode(value);
+    }
+  })();
+  const readUntil = async (ev: string) => {
+    const t0 = Date.now();
+    while (!buf.includes(`event: ${ev}`) && Date.now() - t0 < 600) await new Promise((r) => setTimeout(r, 25));
+    const m = buf.match(new RegExp(`event: ${ev}\\ndata: (.*)\\n`));
+    return m ? JSON.parse(m[1]) : undefined;
+  };
+  const hist = await readUntil("history");
+  ok(hist?.coin?.mint === mint && Array.isArray(hist.candles) && hist.candles.length > 0, "history carries the coin and its 1s candles");
+  // the mock market trades on a random subset each step; a tick for our coin arrives within a few steps
+  let tick: any;
+  for (let i = 6; i <= 40 && !tick; i++) {
+    market3.step(Date.now() + i * 1000);
+    tick = await readUntil("tick");
+  }
+  ok(tick && tick.candles.length >= 1 && tick.mcap_sol > 0, "a trade arrives as a tick");
+  const bad = await fetch("http://127.0.0.1:18787/api/live?mint=not%20a%20mint");
+  ok(bad.status === 400, "live feed rejects a malformed mint");
+  ctrl.abort();
+  await new Promise((r) => setTimeout(r, 50));
+}
 const post = async (path: string, body: unknown) => {
   const r = await fetch(`http://127.0.0.1:18787${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   return { status: r.status, json: (await r.json()) as any };

@@ -389,7 +389,16 @@ body[data-route="bot"] .foot { display: none; }
 .scr-title b { font-size: 1.1em; font-weight: 600; }
 .scr-title .chip { height: auto; padding: 0.25em 0.55em; font-size: 0.85em; }
 .scr-mcap, .scr-chg { color: var(--ink-2); }
-.scr-tf { color: var(--ink-3); font-size: 0.9em; }
+.scr-tf { display: flex; align-items: center; gap: 4px; color: var(--ink-3); font-size: 0.9em; }
+.scr-tf .tf-btn { height: 1.9em; padding: 0 0.6em; border: 1px solid transparent; border-radius: 999px; background: transparent; color: var(--ink-3); font: inherit; cursor: pointer; }
+.scr-tf .tf-btn:hover { color: var(--ink); }
+.scr-tf .tf-btn.on { color: var(--ink); border-color: var(--line); background: rgba(255, 255, 255, 0.04); }
+.scr-tf .tf-cur { color: var(--ink-2); }
+.scr-tf .tf-live { display: inline-flex; align-items: center; gap: 0.45em; margin-right: 0.5em; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.78em; }
+.scr-tf .tf-live::before { content: ""; width: 0.55em; height: 0.55em; border-radius: 50%; background: var(--ink-3); }
+.scr-tf .tf-live.on { color: var(--up); }
+.scr-tf .tf-live.on::before { background: var(--up); box-shadow: 0 0 0 0 rgba(95, 212, 154, 0.5); animation: live-ping 1.6s infinite; }
+@keyframes live-ping { 0% { box-shadow: 0 0 0 0 rgba(95, 212, 154, 0.5); } 70% { box-shadow: 0 0 0 0.45em rgba(95, 212, 154, 0); } 100% { box-shadow: 0 0 0 0 rgba(95, 212, 154, 0); } }
 .scr-chart { position: relative; flex: 1; min-height: 0; }
 .cg { display: block; }
 .cg-grid { stroke: rgba(150, 178, 255, 0.07); stroke-width: 1; shape-rendering: crispEdges; }

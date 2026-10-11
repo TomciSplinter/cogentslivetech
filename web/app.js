@@ -2,7 +2,7 @@
 // and the Cogents TV page that the broadcaster streams to Twitch.
 import { createDemoSource } from "./data-demo.js";
 import { Mind, mindSettings, mindSnapshot } from "./mind.js";
-import { renderCandles, changePct, fmtMcap } from "./chart.js";
+import { renderCandles, changeSince, fmtMcap } from "./chart.js";
 import { wallet, short, provider, isMobile, phantomLink } from "./wallet.js";
 
 const cfg = window.COGENTS_CONFIG ?? {};
@@ -537,7 +537,7 @@ async function homeView() {
   };
   let tileMind = null;
   let tileCandles = null;
-  const drawTile = () => tileCandles && renderCandles(tileChart, tileCandles.slice(-40), { compact: true });
+  const drawTile = () => tileCandles && renderCandles(tileChart, tileCandles, { compact: true, frame: "5s" });
   const tileRo = new ResizeObserver(drawTile);
   tileRo.observe(tileChart);
   onCleanup(() => tileRo.disconnect());
@@ -944,7 +944,7 @@ function buildPlayer(bot, { tv = false, chat = false } = {}) {
   const voice = new Voice(mind, subs);
 
   const scrTitle = h("div", { class: "scr-title" });
-  const tfChip = h("span", { class: "scr-tf" });
+  const tfChip = h("div", { class: "scr-tf" });
   const chartHost = h("div", { class: "scr-chart" });
   const scanner = h("ol", { class: "scr-scan" });
   scanner.hidden = true;
@@ -1006,14 +1006,103 @@ function buildPlayer(bot, { tv = false, chat = false } = {}) {
     syncSound();
   }
 
-  let lastChart = null;
+  // ---- the chart: a live tape fed by the engine (1-second candles, every trade within ~250ms),
+  // falling back to the database snapshot (5-second bars, refreshed every few seconds)
+  let lastChart = null; // { mint, candles, opts, position, row }
+  let frame = "auto"; // viewer's timeframe pick
+  let live = null; // { mint, candles, coin, offset, connected }
+  let feedStop = null;
+  let feedMint = null;
+  let drawReq = 0;
+  const serverNow = () => Date.now() + (live?.offset ?? 0);
+  const liveReady = () => live && lastChart && live.mint === lastChart.mint && live.candles.length >= 2;
+
+  const paintTf = (tf, isLive) => {
+    if (!tf) return void tfChip.replaceChildren();
+    const picks = ["1s", "5s", "15s", "1m"];
+    tfChip.replaceChildren(
+      h("span", { class: `tf-live${isLive ? " on" : ""}`, title: isLive ? "Live: every trade as it happens" : "Snapshot: refreshed every few seconds" }, isLive ? "live" : "delayed"),
+      ...(tv
+        ? [h("span", { class: "tf-cur" }, `${tf} candles`)]
+        : picks.map((f) => h("button", { class: `tf-btn${f === tf ? " on" : ""}`, type: "button", onclick: () => ((frame = f), draw()) }, f))),
+    );
+  };
   const draw = () => {
     if (!lastChart) return;
-    const tf = renderCandles(chartHost, lastChart.candles, { ...lastChart.opts, big: tv, usd: solUsd });
-    tfChip.textContent = tf ? `${tf} candles` : "";
+    const useLive = liveReady();
+    const candles = useLive ? live.candles : lastChart.candles;
+    const tf = renderCandles(chartHost, candles, {
+      ...lastChart.opts,
+      big: tv,
+      usd: solUsd,
+      frame: frame === "auto" ? (useLive ? "1s" : "5s") : frame,
+      now: useLive ? serverNow() : 0,
+      base: useLive ? live.ms || 1000 : 5000,
+    });
+    paintTf(tf, !!useLive);
+  };
+  const requestDraw = () => {
+    if (drawReq) return;
+    drawReq = requestAnimationFrame(() => {
+      drawReq = 0;
+      draw();
+    });
   };
   const ro = new ResizeObserver(draw);
   ro.observe(chartHost);
+  // the tape moves one candle per second even when nobody trades
+  const clock = setInterval(() => liveReady() && requestDraw(), 1000);
+
+  const mergeCandles = (into, fresh) => {
+    for (const k of fresh ?? []) {
+      const last = into[into.length - 1];
+      if (last && last[0] === k[0]) into[into.length - 1] = k;
+      else if (!last || k[0] > last[0]) into.push(k);
+    }
+    if (into.length > 1800) into.splice(0, into.length - 1800);
+  };
+  const openFeed = (mint) => {
+    if (feedMint === mint) return;
+    feedStop?.();
+    feedStop = null;
+    feedMint = mint;
+    live = null;
+    if (!mint || !source.liveFeed) return;
+    feedStop = source.liveFeed(mint, {
+      history: (m) => {
+        live = { mint, candles: Array.isArray(m.candles) ? m.candles : [], coin: m.coin, offset: m.now - Date.now(), connected: true, ms: m.ms || 1000 };
+        paintTitle();
+        requestDraw();
+      },
+      tick: (m) => {
+        if (!live || live.mint !== mint) return;
+        mergeCandles(live.candles, m.candles);
+        live.offset = m.now - Date.now();
+        live.connected = true;
+        live.coin = { ...live.coin, mcap_sol: m.mcap_sol, price_sol: m.price_sol, progress: m.progress };
+        paintTitle();
+        requestDraw();
+      },
+      error: () => {
+        if (live) live.connected = false;
+      },
+    });
+  };
+  // title line: symbol, holding/watching, market cap and position P&L, all from the live price when we have it
+  const paintTitle = () => {
+    if (!lastChart) return;
+    const row = live && live.mint === lastChart.mint && live.coin ? { ...lastChart.row, ...live.coin } : lastChart.row;
+    if (!row) return;
+    const position = lastChart.position;
+    const candles = liveReady() ? live.candles : lastChart.candles;
+    const chg = position ? ((Number(position.tokens) * Number(row.price_sol) - Number(position.cost_sol)) / Number(position.cost_sol)) * 100 : changeSince(candles, 10 * 60_000);
+    scrTitle.replaceChildren(
+      h("b", {}, `$${row.symbol}`),
+      h("span", { class: `chip${position ? " chip-amber" : ""}` }, position ? "Holding" : "Watching"),
+      h("span", { class: "scr-mcap" }, `Market cap ${mcap(row.mcap_sol)}`),
+      h("span", { class: "scr-chg" }, position ? "Position " : "10 min ", h("span", { class: tone(chg) }, pct(chg))),
+    );
+  };
 
   return {
     el,
@@ -1064,21 +1153,18 @@ function buildPlayer(bot, { tv = false, chat = false } = {}) {
         h("div", {}, h("dt", {}, "Return"), h("dd", { class: pf.traded ? tone(pf.ret) : "" }, pf.traded ? pct(pf.ret) : "–")),
         h("div", {}, h("dt", {}, "Bags"), h("dd", {}, String(pos.length))),
       );
-      if (coin?.candles?.length >= 2) {
+      const focus = pos[0]?.mint ?? b.watching_mint ?? null;
+      openFeed(focus);
+      const row = coin?.mint === focus ? coin : live?.mint === focus ? live.coin : undefined;
+      const haveLive = live && live.mint === focus && live.candles.length >= 2;
+      if (focus && row && (coin?.candles?.length >= 2 || haveLive)) {
         scanner.hidden = true;
         chartHost.hidden = false;
-        const position = pos.find((p) => p.mint === coin.mint);
-        const marks = (trades ?? []).filter((t) => t.mint === coin.mint).map((t) => ({ t: Date.parse(t.created_at), side: t.side, sol: t.sol }));
-        lastChart = { candles: coin.candles, opts: { entry: position ? Number(position.entry_price) * 1e9 : undefined, marks } };
+        const position = pos.find((p) => p.mint === focus);
+        const marks = (trades ?? []).filter((t) => t.mint === focus).map((t) => ({ t: Date.parse(t.created_at), side: t.side, sol: t.sol }));
+        lastChart = { mint: focus, candles: coin?.candles ?? [], opts: { entry: position ? Number(position.entry_price) * 1e9 : undefined, marks }, position, row };
         draw();
-        // holding: the position's own profit (same number as Open bags); watching: the last 10 minutes
-        const chg = position ? ((Number(position.tokens) * Number(coin.price_sol) - Number(position.cost_sol)) / Number(position.cost_sol)) * 100 : changePct(coin.candles.slice(-40));
-        scrTitle.replaceChildren(
-          h("b", {}, `$${coin.symbol}`),
-          h("span", { class: `chip${position ? " chip-amber" : ""}` }, position ? "Holding" : "Watching"),
-          h("span", { class: "scr-mcap" }, `Market cap ${mcap(coin.mcap_sol)}`),
-          h("span", { class: "scr-chg" }, position ? "Position " : "10 min ", h("span", { class: tone(chg) }, pct(chg))),
-        );
+        paintTitle();
       } else {
         lastChart = null;
         chartHost.hidden = true;
@@ -1089,9 +1175,9 @@ function buildPlayer(bot, { tv = false, chat = false } = {}) {
         scanner.replaceChildren(
           ...(movers ?? []).slice(0, 7).map((m) => {
             const spark = h("span", { class: "scan-spark" });
-            const chg = changePct((m.candles ?? []).slice(-20));
+            const chg = changeSince(m.candles ?? [], 5 * 60_000);
             const row = h("li", {}, h("b", {}, `$${m.symbol}`), h("span", { class: "muted" }, `${age(m.created_at)} old`), h("span", {}, mcap(m.mcap_sol)), spark, h("span", { class: tone(chg) }, pct(chg)));
-            requestAnimationFrame(() => m.candles?.length > 1 && renderCandles(spark, m.candles.slice(-30), { compact: true }));
+            requestAnimationFrame(() => m.candles?.length > 1 && renderCandles(spark, m.candles, { compact: true, frame: "15s" }));
             return row;
           }),
         );
@@ -1100,6 +1186,9 @@ function buildPlayer(bot, { tv = false, chat = false } = {}) {
     },
     destroy() {
       ro.disconnect();
+      clearInterval(clock);
+      if (drawReq) cancelAnimationFrame(drawReq);
+      feedStop?.();
       voice.stop();
     },
   };

@@ -186,7 +186,9 @@ The website talks to the engine at `https://api.YOUR-DOMAIN`. Caddy adds HTTPS a
    ```bash
    cat > /etc/caddy/Caddyfile <<'EOF'
    api.YOUR-DOMAIN {
-     reverse_proxy 127.0.0.1:8787
+     reverse_proxy 127.0.0.1:8787 {
+       flush_interval -1
+     }
    }
    EOF
    systemctl reload caddy

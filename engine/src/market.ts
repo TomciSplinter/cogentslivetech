@@ -26,15 +26,31 @@ export interface Coin {
   lastTradeAt: number;
   trades: TradeEvent[]; // recent trades (last 15 min)
   history: [number, number][]; // [timeMs, priceSol] samples for charts
-  candles: Candle[]; // 5-second OHLC candles in market cap (SOL), built from every trade
+  candles: Candle[]; // 1-second OHLC candles in market cap (SOL), built from every trade
   devSold: boolean;
   migrated: boolean;
 }
 
 /** [bucket start ms, open, high, low, close, volume SOL]; prices are market cap in SOL. */
 export type Candle = [number, number, number, number, number, number];
-export const CANDLE_MS = 5_000;
-const MAX_CANDLES = 720; // one hour
+export const CANDLE_MS = 1_000;
+const MAX_CANDLES = 1800; // 30 minutes of 1-second candles
+
+/** Merge candles into coarser buckets (e.g. 5s bars for the database snapshot). */
+export function aggregateCandles(candles: Candle[], ms: number): Candle[] {
+  const out: Candle[] = [];
+  for (const k of candles) {
+    const b = k[0] - (k[0] % ms);
+    const last = out[out.length - 1];
+    if (last && last[0] === b) {
+      last[2] = Math.max(last[2], k[2]);
+      last[3] = Math.min(last[3], k[3]);
+      last[4] = k[4];
+      last[5] += k[5];
+    } else out.push([b, k[1], k[2], k[3], k[4], k[5]]);
+  }
+  return out;
+}
 
 function addToCandles(c: Coin, t: number, mcap: number, volSol: number) {
   const bucket = t - (t % CANDLE_MS);
@@ -68,9 +84,18 @@ export interface CoinStats {
   devSold: boolean;
 }
 
+export type TickListener = (coin: Coin, now: number) => void;
+
 export abstract class Market {
   coins = new Map<string, Coin>();
   protected held = new Set<string>();
+  private tickListeners = new Set<TickListener>();
+
+  /** Called after every trade on any coin (the live chart feed hangs off this). */
+  onTick(fn: TickListener): () => void {
+    this.tickListeners.add(fn);
+    return () => this.tickListeners.delete(fn);
+  }
 
   abstract start(): void;
   abstract stop(): void;
@@ -174,6 +199,7 @@ export abstract class Market {
     const side = e.txType === "sell" ? "sell" : "buy";
     c.trades.push({ t: now, side, sol: Number(e.solAmount) || 0, trader: e.traderPublicKey ?? "" });
     if (side === "sell" && e.traderPublicKey && e.traderPublicKey === c.creator) c.devSold = true;
+    if (this.tickListeners.size) for (const fn of this.tickListeners) fn(c, now);
   }
 
   protected onMigration(e: any) {

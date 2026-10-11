@@ -90,7 +90,8 @@ export function createDemoSource() {
   const timers = new Map();
   let tv = { bot_id: "rohm", since: iso(), sol_usd: 182 };
 
-  const CANDLE = 5_000;
+  const CANDLE = 1_000;
+  const feeds = new Map(); // mint -> Set of live-feed listeners
   function pushTrade(c, t, mcap, vol) {
     const b = t - (t % CANDLE);
     const last = c.candles[c.candles.length - 1];
@@ -102,8 +103,24 @@ export function createDemoSource() {
     } else {
       const o = last ? last[4] : mcap;
       c.candles.push([b, o, Math.max(o, mcap), Math.min(o, mcap), mcap, vol]);
-      if (c.candles.length > 200) c.candles.shift();
+      if (c.candles.length > 1800) c.candles.shift();
     }
+  }
+
+  // what the engine writes to the database: 5-second bars (the live feed carries the 1-second ones)
+  function bars5s(candles) {
+    const out = [];
+    for (const k of candles) {
+      const b = k[0] - (k[0] % 5000);
+      const last = out[out.length - 1];
+      if (last && last[0] === b) {
+        last[2] = Math.max(last[2], k[2]);
+        last[3] = Math.min(last[3], k[3]);
+        last[4] = k[4];
+        last[5] += k[5];
+      } else out.push([b, k[1], k[2], k[3], k[4], k[5]]);
+    }
+    return out;
   }
 
   function newCoin() {
@@ -167,17 +184,28 @@ export function createDemoSource() {
   function tickMarket() {
     const now = Date.now();
     for (const c of coins.values()) {
-      for (let k = 0; k < 2; k++) {
-        c.mcap_sol = Math.max(5, c.mcap_sol * (1 + c.drift * 0.5 + (Math.random() - 0.5) * 0.018));
-        pushTrade(c, now - 1500 + k * 1500, c.mcap_sol, Math.random() * 1.5);
+      // bursty like a real launch: most seconds see a trade or two, some see none
+      const n = Math.random() < 0.3 ? 0 : Math.random() < 0.7 ? 1 : 2 + Math.floor(Math.random() * 3);
+      for (let k = 0; k < n; k++) {
+        c.mcap_sol = Math.max(5, c.mcap_sol * (1 + c.drift * 0.3 + (Math.random() - 0.5) * 0.012));
+        pushTrade(c, now - 900 + k * 300, c.mcap_sol, Math.random() * 0.8);
       }
       c.price_sol = c.mcap_sol / 1e9;
-      c.progress = Math.min(100, c.progress + Math.random());
-      c.history.push([now, c.price_sol]);
-      if (c.history.length > 180) c.history.shift();
-      if (Math.random() < 0.05) c.drift = (Math.random() - 0.42) * 0.02;
+      if (n) {
+        c.progress = Math.min(100, c.progress + Math.random() * 0.4);
+        const ls = feeds.get(c.mint);
+        if (ls?.size) {
+          const msg = { now, candles: clone(c.candles.slice(-2)), mcap_sol: c.mcap_sol, price_sol: c.price_sol, progress: c.progress };
+          ls.forEach((fn) => fn.tick?.(msg));
+        }
+      }
+      if (now % 10_000 < 1000) {
+        c.history.push([now, c.price_sol]);
+        if (c.history.length > 180) c.history.shift();
+      }
+      if (Math.random() < 0.02) c.drift = (Math.random() - 0.42) * 0.02;
     }
-    if (coins.size < 8 && Math.random() < 0.2) newCoin();
+    if (coins.size < 8 && Math.random() < 0.07) newCoin();
   }
 
   function tickBot(b) {
@@ -314,7 +342,7 @@ export function createDemoSource() {
   }
 
   seedHistory();
-  setInterval(tickMarket, 3000);
+  setInterval(tickMarket, 1000);
   setTimeout(fakeChat, 2000);
   setInterval(rotateTv, 90_000);
 
@@ -345,14 +373,14 @@ export function createDemoSource() {
     },
     async getCoin(mint) {
       const c = coins.get(mint);
-      return c && clone(c);
+      return c && { ...clone(c), candles: bars5s(c.candles).slice(-72) };
     },
     async getMovers(limit = 8) {
       return clone(
         [...coins.values()]
-          .sort((a, b) => b.candles.slice(-20).reduce((x, k) => x + k[5], 0) - a.candles.slice(-20).reduce((x, k) => x + k[5], 0))
+          .sort((a, b) => b.candles.slice(-100).reduce((x, k) => x + k[5], 0) - a.candles.slice(-100).reduce((x, k) => x + k[5], 0))
           .slice(0, limit)
-          .map((c) => ({ mint: c.mint, symbol: c.symbol, mcap_sol: c.mcap_sol, created_at: c.created_at, candles: c.candles.slice(-40) })),
+          .map((c) => ({ mint: c.mint, symbol: c.symbol, mcap_sol: c.mcap_sol, created_at: c.created_at, candles: bars5s(c.candles).slice(-72) })),
       );
     },
     async getCoins(mints) {
@@ -364,6 +392,15 @@ export function createDemoSource() {
     subscribe(l) {
       listeners.add(l);
       return () => listeners.delete(l);
+    },
+    liveFeed(mint, on) {
+      const c = coins.get(mint);
+      if (!c) return null;
+      const set = feeds.get(mint) ?? new Set();
+      feeds.set(mint, set);
+      set.add(on);
+      setTimeout(() => on.history?.({ now: Date.now(), ms: CANDLE, coin: { mint: c.mint, symbol: c.symbol, name: c.name, mcap_sol: c.mcap_sol, price_sol: c.price_sol, progress: c.progress, created_at: c.created_at }, candles: clone(c.candles.slice(-900)) }), 30);
+      return () => set.delete(on);
     },
     async sendChat(botId, username, text) {
       const row = { id: uid++, bot_id: botId, username, text, created_at: iso() };

@@ -67,6 +67,32 @@ export function createSupabaseSource(url, key, apiUrl) {
     async getTv() {
       return rows(await sb.from("tv_state").select("bot_id,since,sol_usd").eq("id", 1).limit(1))[0];
     },
+    /**
+     * Live chart feed for one coin from the engine (Server-Sent Events): the last 15 minutes of
+     * 1-second candles once, then every trade within ~250ms. Returns a stop function, or null
+     * when there is no API to connect to (the page then falls back to the database snapshot).
+     */
+    liveFeed(mint, on) {
+      if (!apiUrl || typeof EventSource === "undefined") return null;
+      const es = new EventSource(`${apiUrl.replace(/\/$/, "")}/api/live?mint=${encodeURIComponent(mint)}`);
+      const parse = (e) => {
+        try {
+          return JSON.parse(e.data);
+        } catch {
+          return null;
+        }
+      };
+      es.addEventListener("history", (e) => {
+        const m = parse(e);
+        if (m) on.history?.(m);
+      });
+      es.addEventListener("tick", (e) => {
+        const m = parse(e);
+        if (m) on.tick?.(m);
+      });
+      es.onerror = () => on.error?.(); // EventSource reconnects by itself; history arrives again
+      return () => es.close();
+    },
     subscribe({ onUtterance, onChat, onTrade, onBot }) {
       const ch = sb
         .channel(`cogents-live-${Math.random().toString(36).slice(2)}`)

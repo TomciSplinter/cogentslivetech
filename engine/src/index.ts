@@ -7,7 +7,7 @@ import { fetchSolUsd } from "./solprice.ts";
 import { createBrain } from "./brain.ts";
 import { config, describeConfig } from "./config.ts";
 import { BotManager } from "./manager.ts";
-import { createMarket } from "./market.ts";
+import { aggregateCandles, createMarket } from "./market.ts";
 import { hasMasterKey } from "./secrets.ts";
 import { createStore, type CoinRow } from "./store.ts";
 import { log } from "./util.ts";
@@ -51,7 +51,10 @@ async function main() {
             progress: c.progress,
             created_at: new Date(c.createdAt).toISOString(),
             history: c.history.slice(-180),
-            candles: c.candles.slice(-360).map((k) => [k[0], +k[1].toFixed(3), +k[2].toFixed(3), +k[3].toFixed(3), +k[4].toFixed(3), +k[5].toFixed(3)] as [number, number, number, number, number, number]),
+            // 5-second bars for tiles and sparklines; the live chart streams 1-second candles from the API
+            candles: aggregateCandles(c.candles, 5_000)
+              .slice(-72)
+              .map((k) => [k[0], +k[1].toFixed(3), +k[2].toFixed(3), +k[3].toFixed(3), +k[4].toFixed(3), +k[5].toFixed(3)] as [number, number, number, number, number, number]),
             updated_at: nowIso,
           });
         }
@@ -72,12 +75,16 @@ async function main() {
 
   timers.push(setInterval(() => store.cleanup().catch((e) => log("store", "cleanup failed:", e.message)), 3600_000));
 
-  const api = startApi(manager, () => ({
-    market: config.market,
-    coinsTracked: market.coins.size,
-    tv: manager.tvBotId,
-    bots: [...manager.bots.values()].map((b) => ({ id: b.def.id, house: b.def.house, mode: b.exec.mode, paused: !!b.def.paused, sol: b.state.solBalance, bags: b.state.positions.size, viewers: b.viewers })),
-  }));
+  const api = startApi(
+    manager,
+    () => ({
+      market: config.market,
+      coinsTracked: market.coins.size,
+      tv: manager.tvBotId,
+      bots: [...manager.bots.values()].map((b) => ({ id: b.def.id, house: b.def.house, mode: b.exec.mode, paused: !!b.def.paused, sol: b.state.solBalance, bags: b.state.positions.size, viewers: b.viewers })),
+    }),
+    market,
+  );
 
   const shutdown = () => {
     log("cogents", "shutting down");
