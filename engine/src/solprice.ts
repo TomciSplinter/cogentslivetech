@@ -24,3 +24,22 @@ export async function fetchSolUsd(): Promise<number | undefined> {
   }
   return undefined;
 }
+
+/** Prices in SOL for up to 50 tokens, from Jupiter. Missing tokens are left out. */
+export async function fetchTokenPricesSol(mints: string[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (!mints.length) return out;
+  try {
+    const ids = [SOL_MINT, ...mints.slice(0, 50)].join(",");
+    const r = await fetchT(`https://lite-api.jup.ag/price/v3?ids=${ids}`, {}, 8000);
+    if (!r.ok) return out;
+    const j: any = await r.json();
+    const sol = Number(j?.[SOL_MINT]?.usdPrice);
+    if (!(sol > 0)) return out;
+    for (const m of mints) {
+      const usd = Number(j?.[m]?.usdPrice);
+      if (usd > 0) out.set(m, usd / sol);
+    }
+  } catch {}
+  return out;
+}

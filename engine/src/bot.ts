@@ -158,7 +158,11 @@ export class Bot {
       const seen = new Set(smart.map((c) => c.mint));
       list = [...smart, ...this.market.candidates(now, this.def.limits.maxCoinAgeMin, 10).filter((c) => !seen.has(c.mint))];
     } else list = this.market.candidates(now, this.def.limits.maxCoinAgeMin, 10);
-    return list.filter((c) => !entryFails(c, this.def.entry)).slice(0, 8);
+    // a smart-money coin passes with the light filter: the followed wallet is the demand signal, and a coin
+    // first seen through its trade has no crowd stats yet
+    const f = this.def.entry;
+    const light = f && { noDevSold: f.noDevSold, maxChange5mPct: f.maxChange5mPct, curveMax: f.curveMax };
+    return list.filter((c) => !entryFails(c, c.smartBuyers10m > c.smartSellers10m ? light : f)).slice(0, 8);
   }
 
   private context(now: number, menu = this.menu(now)): TurnContext {

@@ -142,6 +142,29 @@ export abstract class Market {
     this.onTrade({ signature: s.signature, mint: s.mint, txType: s.side, solAmount: s.sol, tokenAmount: s.tokens, traderPublicKey: s.wallet, marketCapSol: mcap }, Date.now());
   }
 
+  /** A price from an outside source (Jupiter) for a coin we don't get a trade stream for. */
+  applyPrice(mint: string, priceSol: number, now: number) {
+    const c = this.coins.get(mint);
+    if (!c || !(priceSol > 0)) return;
+    const mcap = priceSol * TOTAL_SUPPLY;
+    if (Math.abs(mcap - c.mcapSol) / (c.mcapSol || 1) < 1e-6) return;
+    c.priceSol = priceSol;
+    c.mcapSol = mcap;
+    addToCandles(c, now, mcap, 0);
+    if (this.tickListeners.size) for (const fn of this.tickListeners) fn(c, now);
+  }
+  /** Coins that need an outside price: met through smart money and not streaming trades. */
+  coinsNeedingPrice(now: number): string[] {
+    const out: string[] = [];
+    for (const c of this.coins.values()) {
+      if (!c.ageUnknown) continue;
+      const streaming = c.trades.some((t) => now - t.t < 60_000 && !this.smartWallets.has(t.trader));
+      const wanted = this.held.has(c.mint) || (c.smart.length && now - c.smart[c.smart.length - 1].t < 15 * 60_000);
+      if (wanted && !streaming) out.push(c.mint);
+    }
+    return out.slice(0, 50);
+  }
+
   /** Smart-money view of a coin over the last `windowMs`. */
   smartStats(c: Coin, now: number, windowMs = 10 * 60_000) {
     const recent = c.smart.filter((t) => now - t.t <= windowMs);

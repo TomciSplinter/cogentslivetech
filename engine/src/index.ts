@@ -3,7 +3,7 @@
 //   npm start        → live pump.fun data
 //   npm run demo     → simulated market (free, for testing)
 import { startApi } from "./api.ts";
-import { fetchSolUsd } from "./solprice.ts";
+import { fetchSolUsd, fetchTokenPricesSol } from "./solprice.ts";
 import { createBrain } from "./brain.ts";
 import { config, describeConfig } from "./config.ts";
 import { BotManager } from "./manager.ts";
@@ -74,6 +74,19 @@ async function main() {
       }
     }, 10_000),
   );
+
+  // coins met through smart money that PumpPortal doesn't stream (e.g. on Raydium): price them via Jupiter
+  if (config.smartWallets.length) {
+    timers.push(
+      setInterval(async () => {
+        const mints = market.coinsNeedingPrice(Date.now());
+        if (!mints.length) return;
+        const prices = await fetchTokenPricesSol(mints);
+        const now = Date.now();
+        for (const [m, p] of prices) market.applyPrice(m, p, now);
+      }, 5_000),
+    );
+  }
 
   // SOL price in USD, so the website can show market caps in dollars
   const pushSolUsd = async () => {
