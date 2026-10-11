@@ -24,6 +24,16 @@ async function main() {
   const manager = new BotManager(market, brain, store);
 
   await manager.load();
+  // remember the market from before the restart: without it, bots that want coins older than a few
+  // minutes stare at an empty menu until the market grows back
+  if (config.market === "pumpportal") {
+    try {
+      const n = market.remember(await store.recentCoins(180));
+      if (n) log("market", `remembered ${n} recent coins from before the restart`);
+    } catch (e) {
+      log("market", "could not reload recent coins:", (e as Error).message);
+    }
+  }
   market.start();
   manager.start();
 
@@ -46,6 +56,7 @@ async function main() {
         for (const b of manager.bots.values()) if (b.watching) mints.add(b.watching);
         market.candidates(Date.now(), 60, 10).forEach((c) => mints.add(c.mint));
         market.smartCandidates(Date.now(), 6).forEach((c) => mints.add(c.mint));
+        market.biggestYoung(Date.now()).forEach((c) => mints.add(c.mint)); // the market's memory across restarts
         const rows: CoinRow[] = [];
         const nowIso = new Date().toISOString();
         for (const m of mints) {

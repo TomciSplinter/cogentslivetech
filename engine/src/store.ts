@@ -125,6 +125,8 @@ export interface Store {
   latestChatId(botId: string): Promise<number>;
   viewerCount(botId: string): Promise<number>;
   upsertCoins(rows: CoinRow[]): Promise<void>;
+  /** Coins saved in the last `maxAgeMin` minutes, biggest first: the market's memory across restarts. */
+  recentCoins(maxAgeMin: number, limit?: number): Promise<CoinRow[]>;
   cleanup(): Promise<void>;
 }
 
@@ -256,6 +258,11 @@ export class SupabaseStore implements Store {
   }
   async upsertCoins(rows: CoinRow[]) {
     if (rows.length) await this.rest("POST", "coins?on_conflict=mint", rows, "resolution=merge-duplicates,return=minimal");
+  }
+  async recentCoins(maxAgeMin: number, limit = 200): Promise<CoinRow[]> {
+    const since = encodeURIComponent(new Date(Date.now() - maxAgeMin * 60_000).toISOString());
+    const rows = await this.rest("GET", `coins?select=mint,symbol,name,mcap_sol,price_sol,progress,created_at,updated_at&created_at=gte.${since}&order=mcap_sol.desc&limit=${limit}`);
+    return Array.isArray(rows) ? rows.map((r: any) => ({ ...r, history: [], candles: [] })) : [];
   }
   async cleanup() {
     const iso = (ms: number) => encodeURIComponent(new Date(Date.now() - ms).toISOString());
@@ -395,6 +402,10 @@ export class MemoryStore implements Store {
   }
   async upsertCoins(rows: CoinRow[]) {
     for (const r of rows) this.coins.set(r.mint, r);
+  }
+  async recentCoins(maxAgeMin: number, limit = 200): Promise<CoinRow[]> {
+    const since = Date.now() - maxAgeMin * 60_000;
+    return [...this.coins.values()].filter((r) => Date.parse(r.created_at) >= since).sort((a, b) => b.mcap_sol - a.mcap_sol).slice(0, limit);
   }
   async cleanup() {}
 }

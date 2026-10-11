@@ -259,6 +259,49 @@ export abstract class Market {
     return this.coins.get(mint);
   }
 
+  /**
+   * Remember coins saved before a restart, so the market view isn't blank for an hour afterwards
+   * (an analyst-style bot wants coins that grew past launch, and those take time to appear).
+   * Their stats refresh through the trade stream and DexScreener as usual.
+   */
+  remember(rows: { mint: string; symbol: string; name: string; mcap_sol: number; progress: number; created_at: string; updated_at: string }[], now = Date.now()) {
+    let n = 0;
+    for (const r of rows) {
+      if (this.coins.has(r.mint) || !(r.mcap_sol > 0)) continue;
+      const createdAt = Date.parse(r.created_at) || now;
+      const lastTradeAt = Math.min(now, Date.parse(r.updated_at) || now);
+      const price = r.mcap_sol / TOTAL_SUPPLY;
+      this.coins.set(r.mint, {
+        mint: r.mint,
+        symbol: r.symbol || `${r.mint.slice(0, 4)}…`,
+        name: r.name || "",
+        creator: "",
+        createdAt,
+        mcapSol: r.mcap_sol,
+        priceSol: price,
+        progress: Number(r.progress) || 0,
+        lastTradeAt,
+        trades: [],
+        history: [[lastTradeAt, price]],
+        candles: [],
+        devSold: false,
+        migrated: false,
+        smart: [],
+      });
+      n++;
+    }
+    if (n) this.syncSubscriptions();
+    return n;
+  }
+
+  /** The biggest coins under `maxAgeMin` old that traded recently: worth remembering across restarts. */
+  biggestYoung(now: number, maxAgeMin = 180, limit = 40): Coin[] {
+    return [...this.coins.values()]
+      .filter((c) => !c.migrated && now - c.createdAt < maxAgeMin * 60_000 && now - c.lastTradeAt < 15 * 60_000)
+      .sort((a, b) => b.mcapSol - a.mcapSol)
+      .slice(0, limit);
+  }
+
   /** Price bots may trade on. Undefined while a coin's only price is one wallet's unconfirmed fill. */
   priceOf(mint: string): number | undefined {
     const c = this.coins.get(mint);

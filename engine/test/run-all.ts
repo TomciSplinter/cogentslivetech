@@ -473,5 +473,18 @@ const tm = parsePrivmsg("@badge-info=;display-name=CoolGuy;mod=0 :coolguy!coolgu
 ok(tm?.user === "CoolGuy" && tm.text === "rohm you're cooked", "parses a Twitch chat line");
 ok(parsePrivmsg(":tmi.twitch.tv 001 justinfan :Welcome") === undefined, "ignores server lines");
 
+// the market remembers recent coins across restarts
+{
+  const m = new MockMarket(2);
+  const now = Date.now();
+  const n = m.remember([
+    { mint: "SeedA111111111111111111111111111111111111111", symbol: "SEEDA", name: "Seed A", mcap_sol: 80, progress: 40, created_at: new Date(now - 50 * 60_000).toISOString(), updated_at: new Date(now - 60_000).toISOString() },
+    { mint: "SeedB111111111111111111111111111111111111111", symbol: "SEEDB", name: "Seed B", mcap_sol: 0, progress: 0, created_at: new Date(now).toISOString(), updated_at: new Date(now).toISOString() },
+  ], now);
+  const a = m.getCoin("SeedA111111111111111111111111111111111111111");
+  ok(n === 1 && !!a && a.mcapSol === 80 && now - a.createdAt > 49 * 60_000, "a saved coin comes back with its age and market cap; a priceless one is skipped");
+  ok(m.biggestYoung(now).some((c) => c.symbol === "SEEDA"), "it counts among the biggest young coins to remember");
+}
+
 console.log(`\n${failed ? "❌" : "✅"} ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);
