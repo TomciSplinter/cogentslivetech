@@ -7,6 +7,8 @@ import { Rpc } from "./solana.ts";
 import { log } from "./util.ts";
 
 const WSOL = "So11111111111111111111111111111111111111112";
+/** Smallest SOL leg that counts as a trade (token-account rent alone is ~0.002 SOL). */
+const MIN_SWAP_SOL = 0.01;
 
 export interface WalletSwap {
   signature: string;
@@ -41,12 +43,15 @@ export function parseSwap(tx: any, wallet: string, signature: string, t: number)
   };
   add(meta.preTokenBalances, -1);
   add(meta.postTokenBalances, 1);
-  let best: [string, number] | undefined;
-  for (const [mint, d] of tok) if (Math.abs(d) > 0 && (!best || Math.abs(d) > Math.abs(best[1]))) best = [mint, d];
-  if (!best) return null;
-  const [mint, d] = best;
-  if (d > 0 && solDelta < -0.0005) return { signature, wallet, mint, side: "buy", sol: -solDelta, tokens: d, priceSol: -solDelta / d, t };
-  if (d < 0 && solDelta > 0.0005) return { signature, wallet, mint, side: "sell", sol: solDelta, tokens: -d, priceSol: solDelta / -d, t };
+  const changed = [...tok].filter(([, d]) => Math.abs(d) > 0);
+  // Exactly one token must change hands against SOL. Two tokens moving = a token-for-token swap
+  // (USDC → coin, say): the SOL leg is just fees, and pricing the coin off it would be wildly wrong.
+  if (changed.length !== 1) return null;
+  const [mint, d] = changed[0];
+  // Below MIN_SWAP_SOL the SOL leg is rent or fees, not a trade: a token someone sent the wallet
+  // (plus 0.002 SOL account rent) must not be read as a buy at a near-zero price.
+  if (d > 0 && solDelta < -MIN_SWAP_SOL) return { signature, wallet, mint, side: "buy", sol: -solDelta, tokens: d, priceSol: -solDelta / d, t };
+  if (d < 0 && solDelta > MIN_SWAP_SOL) return { signature, wallet, mint, side: "sell", sol: solDelta, tokens: -d, priceSol: solDelta / -d, t };
   return null;
 }
 

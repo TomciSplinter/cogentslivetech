@@ -179,11 +179,24 @@ section("smart money: followed wallets feed the copy-trader's menu and exits");
   ok(sell?.side === "sell" && Math.abs(sell.sol - 0.8) < 1e-6, "tokens out + SOL in reads as a sell");
   ok(parseSwap(tx(2e9, 2e9 - 5000, 50, 50), W, "sigC", Date.now()) === null, "no token change: not a swap");
   ok(parseSwap(tx(2e9, 1.5e9, 0, 100000, false), W, "sigD", Date.now()) === null, "wallet not a signer: ignored");
+  // rent for a new token account (~0.002 SOL) next to an incoming transfer is not a buy
+  ok(parseSwap(tx(2e9, 2e9 - 2_039_280 - 5000, 0, 1_000_000), W, "sigE", Date.now()) === null, "tokens received for only rent money: not a buy");
+  // a USDC → coin swap moves two tokens; the SOL leg is just fees, so it can't price the coin
+  const two = tx(2e9, 2e9 - 3_000_000, 0, 1_000_000);
+  two.meta.preTokenBalances.push({ accountIndex: 4, mint: "USDC111111111111111111111111111111111111111", owner: W, uiTokenAmount: { uiAmount: 500 } });
+  two.meta.postTokenBalances.push({ accountIndex: 4, mint: "USDC111111111111111111111111111111111111111", owner: W, uiTokenAmount: { uiAmount: 0 } });
+  ok(parseSwap(two, W, "sigF", Date.now()) === null, "a token-for-token swap is not priced off its SOL fees");
   const m = new MockMarket(3);
   m.setSmartWallets([W]);
   m.ingestWalletSwap(buy!);
   const c = m.getCoin(MINT);
   ok(!!c && c.smart.length === 1 && c.priceSol > 0 && c.candles.length === 1, "an on-chain swap creates the coin with a price and a smart trade");
+  ok(c!.priceProvisional === true && m.priceOf(MINT) === undefined && !m.smartCandidates(Date.now()).some((x) => x.mint === MINT), "until a real source confirms the price, bots can't trade the coin");
+  m.applyPrice(MINT, 6e-6, Date.now());
+  ok(m.priceOf(MINT) === 6e-6 && m.smartCandidates(Date.now()).some((x) => x.mint === MINT), "a Jupiter price confirms it and puts it on the copy menu");
+  // a later wallet fill 1000x off the confirmed price is a signal, not a repricing
+  m.ingestWalletSwap({ ...buy!, signature: "sigG", tokens: 1e9, priceSol: 5e-10 });
+  ok(m.priceOf(MINT) === 6e-6 && m.getCoin(MINT)!.smart.length === 2, "a wildly off wallet fill does not move a confirmed price");
 }
 
 // entry filters are code-enforced

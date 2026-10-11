@@ -40,6 +40,8 @@ export interface Coin {
   smart: SmartTrade[]; // trades by followed wallets (last 60 min)
   ageUnknown?: boolean; // first seen through a smart wallet's trade, not at launch
   metaPending?: boolean;
+  /** Price so far comes only from one followed wallet's fill; bots can't trade on it until a real source confirms it. */
+  priceProvisional?: boolean;
   /** Stats from DexScreener for coins we aren't streaming (refreshed every ~20s). */
   ext?: { t: number; vol5mSol: number; buys5m: number; sells5m: number; change5mPct: number };
 }
@@ -142,7 +144,7 @@ export abstract class Market {
   /** A followed wallet's swap seen on-chain (any DEX): feed it in like a trade event. */
   ingestWalletSwap(s: { signature: string; wallet: string; mint: string; side: "buy" | "sell"; sol: number; tokens: number; priceSol: number; t: number }) {
     const mcap = s.priceSol > 0 ? s.priceSol * TOTAL_SUPPLY : undefined;
-    this.onTrade({ signature: s.signature, mint: s.mint, txType: s.side, solAmount: s.sol, tokenAmount: s.tokens, traderPublicKey: s.wallet, marketCapSol: mcap }, Date.now());
+    this.onTrade({ signature: s.signature, mint: s.mint, txType: s.side, solAmount: s.sol, tokenAmount: s.tokens, traderPublicKey: s.wallet, marketCapSol: mcap, source: "wallet" }, Date.now());
   }
 
   /** Stats from DexScreener for a coin we aren't streaming. */
@@ -150,9 +152,10 @@ export abstract class Market {
     const c = this.coins.get(mint);
     if (!c) return;
     c.ext = { t: now, vol5mSol: e.vol5mSol, buys5m: e.buys5m, sells5m: e.sells5m, change5mPct: e.change5mPct };
-    if (e.mcapSol && e.mcapSol > 0 && now - c.lastTradeAt > 30_000) {
+    if (e.mcapSol && e.mcapSol > 0 && (c.priceProvisional || now - c.lastTradeAt > 30_000)) {
       c.mcapSol = e.mcapSol;
       c.priceSol = e.mcapSol / TOTAL_SUPPLY;
+      c.priceProvisional = false;
     }
   }
   /** Young coins we don't stream right now: candidates for an outside stats refresh. */
@@ -175,6 +178,7 @@ export abstract class Market {
     const c = this.coins.get(mint);
     if (!c || !(priceSol > 0)) return;
     const mcap = priceSol * TOTAL_SUPPLY;
+    c.priceProvisional = false;
     if (Math.abs(mcap - c.mcapSol) / (c.mcapSol || 1) < 1e-6) return;
     c.priceSol = priceSol;
     c.mcapSol = mcap;
@@ -209,7 +213,7 @@ export abstract class Market {
   smartCandidates(now: number, limit = 8, windowMs = 10 * 60_000): CoinStats[] {
     const out: CoinStats[] = [];
     for (const c of this.coins.values()) {
-      if (c.migrated || !c.smart.length) continue;
+      if (c.migrated || !c.smart.length || c.priceProvisional) continue;
       const st = this.smartStats(c, now, windowMs);
       if (!st.buyers.size || st.sellers.size >= st.buyers.size && st.net <= 0) continue;
       if (!st.lastBuy) continue;
@@ -255,8 +259,10 @@ export abstract class Market {
     return this.coins.get(mint);
   }
 
+  /** Price bots may trade on. Undefined while a coin's only price is one wallet's unconfirmed fill. */
   priceOf(mint: string): number | undefined {
-    return this.coins.get(mint)?.priceSol;
+    const c = this.coins.get(mint);
+    return c && !c.priceProvisional ? c.priceSol : undefined;
   }
 
   stats(c: Coin, now: number): CoinStats {
@@ -330,6 +336,7 @@ export abstract class Market {
       createdAt: now,
       ageUnknown: true,
       metaPending: !e.symbol,
+      priceProvisional: e.source === "wallet",
       mcapSol: mcap,
       priceSol: mcap / TOTAL_SUPPLY,
       progress: curveProgress(e),
@@ -405,9 +412,13 @@ export abstract class Market {
       this.resolveMeta(c);
     }
     const mcap = Number(e.marketCapSol);
-    if (mcap > 0) {
+    // One wallet's fill can only nudge a confirmed price, never replace it with something 5x off:
+    // a partial fill, a routed swap or an airdrop read as a trade would otherwise poison every bot's P&L.
+    const trusted = e.source !== "wallet" || c.priceProvisional || (c.mcapSol > 0 && mcap / c.mcapSol < 5 && c.mcapSol / mcap < 5);
+    if (mcap > 0 && trusted) {
       c.mcapSol = mcap;
       c.priceSol = mcap / TOTAL_SUPPLY;
+      if (e.source !== "wallet") c.priceProvisional = false;
       addToCandles(c, now, mcap, Number(e.solAmount) || 0);
     }
     const p = curveProgress(e);
