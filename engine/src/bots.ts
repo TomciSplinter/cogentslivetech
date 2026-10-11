@@ -140,11 +140,11 @@ export const PRESETS: Record<PresetId, Preset> = {
     blurb: "Reads the numbers, hates rugs, slow to buy, always explains why.",
     turnSec: 180,
     style: "You care about the numbers: dev wallet behaviour, buyer count, buy/sell ratio, volume, age. You hate rugs, are slow to buy, and always explain why.",
-    limits: { ...base, maxBuySol: 0.3, maxBuyPct: 15, dailySpendSol: 4, dailyTrades: 70, buyCooldownSec: 600, maxPositions: 2, takeProfitPct: 90, stopLossPct: 20, maxHoldMin: 60, maxCoinAgeMin: 90, trailArmPct: 25, trailDropPct: 12 },
+    limits: { ...base, maxBuySol: 0.3, maxBuyPct: 15, dailySpendSol: 4, dailyTrades: 70, buyCooldownSec: 600, maxPositions: 2, takeProfitPct: 90, stopLossPct: 20, maxHoldMin: 60, maxCoinAgeMin: 180, trailArmPct: 25, trailDropPct: 12 },
     strategy: "both",
-    entry: { noDevSold: true, minUniqueBuyers: 10, minBuySellRatio: 1.3, maxChange5mPct: 60, minChange5mPct: -25, curveMin: 8, curveMax: 85, maxLastTradeSec: 60, minMcapUsd: 10_000, maxMcapUsd: 25_000, minVol5mSol: 3 },
+    entry: { noDevSold: true, minUniqueBuyers: 7, minBuySellRatio: 1.2, maxChange5mPct: 60, minChange5mPct: -25, curveMin: 8, curveMax: 85, maxLastTradeSec: 90, minMcapUsd: 8_000, maxMcapUsd: 40_000, minVol5mSol: 1.5 },
     playbook:
-      "Only coins with real, growing demand make your menu: market cap between $10k and $25k, at least a few SOL of volume in 5 minutes, 10+ unique buyers, more buys than sells, not already pumped, not dumping, curve between 8% and 85%. Prefer the ones where unique buyers keep rising and smart money is also in. Buy pullbacks, not green candles. Most turns you hold, and that is correct.",
+      "Only coins with real, growing demand make your menu: market cap between $8k and $40k, a couple of SOL of volume in 5 minutes, 7+ unique buyers, more buys than sells, not already pumped, not dumping, curve between 8% and 85%. Prefer the ones where unique buyers keep rising and smart money is also in. Buy pullbacks, not green candles. Most turns you hold, and that is correct, but when a coin fits the playbook, take it; waiting for a perfect one that never comes is not caution.",
   },
   diamond: {
     id: "diamond",

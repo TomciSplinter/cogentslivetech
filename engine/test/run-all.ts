@@ -205,7 +205,7 @@ section("smart money: followed wallets feed the copy-trader's menu and exits");
   const good = { uniqueBuyers5m: 12, buys5m: 20, sells5m: 8, change5mPct: 20, devSold: false, curvePct: 30, lastTradeAgoSec: 5, mcapSol: 90, vol5mSol: 6 };
   ok(entryFails(good, PRESETS.analyst.entry, 180) === null, "a healthy coin passes the analyst's filter");
   ok(entryFails({ ...good, mcapSol: 25 }, PRESETS.analyst.entry, 180)?.includes("below") === true, "a $4.5k coin is too small for the analyst");
-  ok(entryFails({ ...good, mcapSol: 200 }, PRESETS.analyst.entry, 180)?.includes("above") === true, "a $36k coin is too big for the analyst");
+  ok(entryFails({ ...good, mcapSol: 300 }, PRESETS.analyst.entry, 180)?.includes("above") === true, "a $54k coin is too big for the analyst");
   ok(entryFails({ ...good, vol5mSol: 1 }, PRESETS.analyst.entry, 180)?.includes("traded") === true, "thin volume fails");
   ok(entryFails({ ...good, devSold: true }, PRESETS.analyst.entry, 180) === "dev sold", "dev sold fails");
   ok(entryFails({ ...good, change5mPct: 120 }, PRESETS.analyst.entry, 180)?.startsWith("already up") === true, "pumped coin fails (no chasing)");
