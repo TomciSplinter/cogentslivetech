@@ -140,7 +140,7 @@ export class WalletWatcher {
     let tx: any = null;
     for (let i = 0; i < 4 && !tx; i++) {
       if (i) await new Promise((r) => setTimeout(r, 1500 * i));
-      tx = await this.rpc.call("getTransaction", [signature, { encoding: "jsonParsed", commitment: "confirmed", maxSupportedTransactionVersion: 0 }]);
+      tx = await this.rpc.call("getTransaction", [signature, { encoding: "jsonParsed", commitment: "confirmed", maxSupportedTransactionVersion: 1 }]);
     }
     if (!tx) return;
     const t = tx.blockTime ? tx.blockTime * 1000 : Date.now();
