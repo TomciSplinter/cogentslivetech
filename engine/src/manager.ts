@@ -13,6 +13,9 @@ import { TwitchChat } from "./twitch.ts";
 import { defFromRow, userPersona, applyOwnerLimits, validateCreate } from "./userbots.ts";
 import { log } from "./util.ts";
 
+/** Longest an unwatched real-money bot waits between turns. */
+const REAL_IDLE_TURN_SEC = 60;
+
 export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {
@@ -132,7 +135,9 @@ export class BotManager {
     for (const b of this.bots.values()) {
       if (b.def.paused) continue;
       const watched = b.def.house || b.viewers > 0 || b.def.id === this.tvBotId;
-      const every = (watched ? b.def.turnSec : Math.max(b.def.turnSec, config.userBotIdleTurnSec)) * 1000;
+      // a real-money bot has someone's SOL in it: it keeps a steady pace even when nobody is watching
+      const idle = b.exec.mode === "real" ? Math.min(config.userBotIdleTurnSec, REAL_IDLE_TURN_SEC) : config.userBotIdleTurnSec;
+      const every = (watched ? b.def.turnSec : Math.max(b.def.turnSec, idle)) * 1000;
       if (now - b.lastTurnAt >= every) b.turn(now);
     }
   }

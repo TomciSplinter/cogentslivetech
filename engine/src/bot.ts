@@ -296,6 +296,10 @@ export class Bot {
       }
 
       if (note) log(this.def.id, note);
+      else if (this.exec.mode === "real" && d.action !== "buy" && d.action !== "sell") {
+        // real money: say why nothing happened, so a quiet bot can be understood from the log
+        log(this.def.id, `${d.action}: ${menu.length} coin${menu.length === 1 ? "" : "s"} on the menu${d.thought ? ` — ${String(d.thought).slice(0, 140)}` : ""}`);
+      }
       if (d.say) await this.say(d.say, d.action === "hold" ? "think" : "trade");
       await this.store.updateBot(this.def.id, {
         sol_balance: round(this.state.solBalance, 6),
