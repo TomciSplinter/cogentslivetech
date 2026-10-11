@@ -1,6 +1,6 @@
 // One live bot: runs its trading turns, talks to chat, and reports everything
 // to the database so the stream page can show it.
-import type { BotDef } from "./bots.ts";
+import { entryFails, type BotDef } from "./bots.ts";
 import type { Brain, TurnContext } from "./brain.ts";
 import type { Executor } from "./executor.ts";
 import type { Market } from "./market.ts";
@@ -22,6 +22,7 @@ const FORCED_LINES: Record<string, string[]> = {
   "stop-loss": ["Stop hit on {sym}. Down {pnl} percent. Moving on.", "{sym} stopped out at minus {pnl}. It happens."],
   "max-hold": ["Held {sym} long enough. Closing it at {pnl} percent.", "Time's up on {sym}, out at {pnl} percent."],
   "trailing-stop": ["{sym} rolled over from the top. Locking in plus {pnl} percent.", "Trailing stop on {sym}, banking {pnl} percent before it fades."],
+  "smart-exit": ["Smart money is leaving {sym}. So am I. {pnl} percent.", "The wallets I follow just sold {sym}. Out, {pnl} percent."],
 };
 
 export class Bot {
@@ -147,7 +148,20 @@ export class Bot {
     return [...this.state.positions.keys()];
   }
 
-  private context(now: number, menu = this.market.candidates(now, this.def.limits.maxCoinAgeMin)): TurnContext {
+  /** The coins this bot may buy this turn: by strategy, then through the code-enforced entry filter. */
+  menu(now: number) {
+    const strat = this.def.strategy ?? "launches";
+    let list = [];
+    if (strat === "copy") list = this.market.smartCandidates(now, 8);
+    else if (strat === "both") {
+      const smart = this.market.smartCandidates(now, 4);
+      const seen = new Set(smart.map((c) => c.mint));
+      list = [...smart, ...this.market.candidates(now, this.def.limits.maxCoinAgeMin, 10).filter((c) => !seen.has(c.mint))];
+    } else list = this.market.candidates(now, this.def.limits.maxCoinAgeMin, 10);
+    return list.filter((c) => !entryFails(c, this.def.entry)).slice(0, 8);
+  }
+
+  private context(now: number, menu = this.menu(now)): TurnContext {
     const s = this.state;
     const cooldownLeft = Math.max(0, this.def.limits.buyCooldownSec * 1000 - (now - s.lastBuyAt));
     return {
@@ -175,16 +189,33 @@ export class Bot {
   /** One trading turn. Safe to call on a timer; overlapping calls are skipped. */
   /** Stop-loss, take-profit, trailing stop and max-hold, checked by code (no AI). */
   private async enforceExits(now: number) {
-    for (const fx of forcedExits(this.state, this.def.limits, this.market, now)) {
+    const exits = forcedExits(this.state, this.def.limits, this.market, now);
+    // copy-traders leave when the wallets they followed leave
+    if ((this.def.strategy ?? "launches") === "copy") {
+      for (const p of this.state.positions.values()) {
+        if (exits.some((x) => x.mint === p.mint)) continue;
+        if (this.market.smartExiting(p.mint, p.openedAt, now)) exits.push({ mint: p.mint, reason: "smart-exit" });
+      }
+    }
+    for (const fx of exits) {
       const p = this.state.positions.get(fx.mint)!;
       const pnl = positionPnlPct(p, this.market.priceOf(p.mint));
       const ok = await this.sell(p, fx.reason, now);
       if (ok) {
         const lines = FORCED_LINES[fx.reason === "trailing-stop" && pnl < 0 ? "stop-loss" : fx.reason] ?? FORCED_LINES["max-hold"];
-        await this.say(lines[Math.floor(Math.random() * lines.length)].replace("{sym}", p.symbol).replace("{pnl}", Math.abs(pnl).toFixed(0)), "trade");
+        const pnlWord = fx.reason === "smart-exit" ? `${pnl >= 0 ? "plus" : "minus"} ${Math.abs(pnl).toFixed(0)}` : Math.abs(pnl).toFixed(0);
+        await this.say(lines[Math.floor(Math.random() * lines.length)].replace("{sym}", p.symbol).replace("{pnl}", pnlWord), "trade");
         await this.store.updateBot(this.def.id, { sol_balance: round(this.state.solBalance, 6), trades_today: this.state.tradesToday, ...this.statsRow() }).catch(() => {});
       }
     }
+  }
+
+  /** A followed wallet just bought: a copy-trader doesn't wait for its clock. */
+  onSmartBuy(now = Date.now()) {
+    if ((this.def.strategy ?? "launches") === "launches" || this.def.paused || this.busy) return;
+    if (now - this.lastTurnAt < 8_000) return; // already looked a moment ago
+    if (this.state.positions.size >= this.def.limits.maxPositions) return;
+    this.turn(now);
   }
 
   /** Runs every few seconds between AI turns, so a dump doesn't wait for the next turn. */
@@ -237,7 +268,7 @@ export class Bot {
 
       // 2) ask the AI
       await this.store.updateBot(this.def.id, { status: "thinking" });
-      const menu = this.market.candidates(now, this.def.limits.maxCoinAgeMin);
+      const menu = this.menu(now);
       const ctx = this.context(now, menu);
       const d = await this.brain.decide(this.def, ctx);
       this.watching = d.mint && this.market.getCoin(d.mint) ? d.mint : menu[0]?.mint;

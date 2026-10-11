@@ -1,5 +1,5 @@
 // Reads settings from the .env file (see .env.example).
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 if (existsSync(".env")) process.loadEnvFile(".env");
 
@@ -13,6 +13,20 @@ const bool = (k: string, d = false) => {
   return v === "true" || v === "1" || v === "yes";
 };
 
+/** Smart-money wallets to follow: SMART_WALLETS in .env (comma-separated) and/or smart-wallets.txt. */
+function loadSmartWallets(): string[] {
+  const out = new Set<string>();
+  for (const w of env("SMART_WALLETS").split(",")) if (w.trim()) out.add(w.trim());
+  const file = env("SMART_WALLETS_FILE", "smart-wallets.txt");
+  if (existsSync(file)) {
+    for (const line of readFileSync(file, "utf8").split("\n")) {
+      const w = line.split("#")[0].trim();
+      if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(w)) out.add(w);
+    }
+  }
+  return [...out];
+}
+
 export const config = {
   // "pumpportal" = live pump.fun data, "mock" = simulated market (free, for testing)
   market: env("MARKET", "pumpportal") as "pumpportal" | "mock",
@@ -21,6 +35,8 @@ export const config = {
   pumpPortalUrl: env("PUMPPORTAL_URL", "https://pumpportal.fun").replace(/\/$/, ""),
   /** How many coins we stream trades for. Each trade message is billed by PumpPortal. */
   watchlistSize: num("WATCHLIST_SIZE", 25),
+  /** Wallets whose pump.fun trades are streamed as "smart money" signals (copy-trading). */
+  smartWallets: loadSmartWallets(),
 
   anthropicKey: env("ANTHROPIC_API_KEY"),
   brainModel: env("BRAIN_MODEL", "claude-sonnet-5-5"),
@@ -101,6 +117,7 @@ export function describeConfig(): string {
     `voices:           ${yes(!!config.elevenLabsKey)}`,
     `database:         ${config.supabaseUrl ? "supabase" : "in-memory (nothing saved!)"}`,
     `solana rpc:       ${yes(!!config.solanaRpcUrl)}`,
+    `smart money:      ${config.smartWallets.length ? `${config.smartWallets.length} wallets followed` : "off (no wallets in smart-wallets.txt)"}`,
     `real trading:     ${config.realTradingEnabled ? "ENABLED" : "off (paper mode)"}`,
     `user bots:        ${config.userBotsEnabled ? `on (max ${config.maxUserBots}, real money ${config.userRealTradingEnabled ? "ENABLED" : "off"})` : "off"}`,
     `twitch chat:      ${config.twitchChannel ? `#${config.twitchChannel}${config.twitchOauthToken ? " (read + reply)" : " (read only)"}` : "off"}`,

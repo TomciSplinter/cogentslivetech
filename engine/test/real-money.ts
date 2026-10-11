@@ -187,7 +187,7 @@ const addr = created.wallet!;
 lamports.set(addr, 1_000_000_000n); // owner deposits 1 SOL
 brain.plan.push((ctx) => ({ action: "buy", mint: ctx.menu[0].mint, sol: 0.2, say: "aping", thought: "" }));
 const now1 = Date.now();
-for (let i = 0; i < 5; i++) market.step(now1);
+for (let i = 0; i < 60; i++) market.step(now1 - (60 - i) * 1000); // enough trading for coins to pass the entry filter
 await bot.turn(now1);
 ok(bot.startSol === 1 && bot.state.positions.size === 1, `deposit detected and buy recorded (start ${bot.startSol}, bags ${bot.state.positions.size})`);
 const pos = [...bot.state.positions.values()][0];

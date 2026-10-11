@@ -108,6 +108,7 @@ const ICONS = {
   target: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="0.6" fill="currentColor"/>',
   mic: '<rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v2.5"/>',
   trash: '<path d="M4.5 7h15M10 11v6M14 11v6M6.5 7l1 12.5h9l1-12.5M9.5 7V4.5h5V7"/>',
+  star: '<path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1.1 5.9L12 16.9l-5.3 2.8 1.1-5.9-4.3-4.1 5.9-.8z"/>',
 };
 function icon(name) {
   const s = document.createElement("span");
@@ -1079,7 +1080,7 @@ function buildPlayer(bot, { tv = false, chat = false } = {}) {
         mergeCandles(live.candles, m.candles);
         live.offset = m.now - Date.now();
         live.connected = true;
-        live.coin = { ...live.coin, mcap_sol: m.mcap_sol, price_sol: m.price_sol, progress: m.progress };
+        live.coin = { ...live.coin, mcap_sol: m.mcap_sol, price_sol: m.price_sol, progress: m.progress, ...(m.symbol ? { symbol: m.symbol } : {}), ...(m.smart_buyers != null ? { smart_buyers: m.smart_buyers } : {}) };
         paintTitle();
         requestDraw();
       },
@@ -1096,9 +1097,11 @@ function buildPlayer(bot, { tv = false, chat = false } = {}) {
     const position = lastChart.position;
     const candles = liveReady() ? live.candles : lastChart.candles;
     const chg = position ? ((Number(position.tokens) * Number(row.price_sol) - Number(position.cost_sol)) / Number(position.cost_sol)) * 100 : changeSince(candles, 10 * 60_000);
+    const smart = Number(row.smart_buyers) || 0;
     scrTitle.replaceChildren(
       h("b", {}, `$${row.symbol}`),
       h("span", { class: `chip${position ? " chip-amber" : ""}` }, position ? "Holding" : "Watching"),
+      ...(smart ? [h("span", { class: "chip chip-smart", title: `${smart} followed smart-money wallet${smart === 1 ? "" : "s"} bought in the last 10 minutes` }, icon("star"), ` Smart money ×${smart}`)] : []),
       h("span", { class: "scr-mcap" }, `Market cap ${mcap(row.mcap_sol)}`),
       h("span", { class: "scr-chg" }, position ? "Position " : "10 min ", h("span", { class: tone(chg) }, pct(chg))),
     );
@@ -1176,7 +1179,8 @@ function buildPlayer(bot, { tv = false, chat = false } = {}) {
           ...(movers ?? []).slice(0, 7).map((m) => {
             const spark = h("span", { class: "scan-spark" });
             const chg = changeSince(m.candles ?? [], 5 * 60_000);
-            const row = h("li", {}, h("b", {}, `$${m.symbol}`), h("span", { class: "muted" }, `${age(m.created_at)} old`), h("span", {}, mcap(m.mcap_sol)), spark, h("span", { class: tone(chg) }, pct(chg)));
+            const sb = Number(m.smart_buyers) || 0;
+            const row = h("li", {}, h("b", {}, `$${m.symbol}`), h("span", { class: "muted" }, sb ? h("span", { class: "smart-dot", title: `Smart money ×${sb}` }, `★${sb}`) : `${age(m.created_at)} old`), h("span", {}, mcap(m.mcap_sol)), spark, h("span", { class: tone(chg) }, pct(chg)));
             requestAnimationFrame(() => m.candles?.length > 1 && renderCandles(spark, m.candles, { compact: true, frame: "15s" }));
             return row;
           }),

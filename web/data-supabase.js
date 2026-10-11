@@ -50,7 +50,7 @@ export function createSupabaseSource(url, key, apiUrl) {
     },
     async getMovers(limit = 8) {
       // the freshest snapshots, busiest first (volume over the last ~5 minutes of candles)
-      const list = rows(await sb.from("coins").select("mint,symbol,mcap_sol,created_at,candles").order("updated_at", { ascending: false }).limit(20));
+      const list = rows(await sb.from("coins").select("mint,symbol,mcap_sol,created_at,candles,smart_buyers").order("updated_at", { ascending: false }).limit(20));
       const vol = (c) => (c.candles ?? []).slice(-20).reduce((x, k) => x + (Number(k[5]) || 0), 0);
       return list
         .sort((a, b) => vol(b) - vol(a))
@@ -62,7 +62,7 @@ export function createSupabaseSource(url, key, apiUrl) {
       return rows(await sb.from("coins").select("mint,symbol,price_sol").in("mint", mints.slice(0, 200)));
     },
     async getCoin(mint) {
-      return rows(await sb.from("coins").select("mint,symbol,name,mcap_sol,price_sol,progress,created_at,candles,updated_at").eq("mint", mint).limit(1))[0];
+      return rows(await sb.from("coins").select("mint,symbol,name,mcap_sol,price_sol,progress,created_at,candles,smart_buyers,updated_at").eq("mint", mint).limit(1))[0];
     },
     async getTv() {
       return rows(await sb.from("tv_state").select("bot_id,since,sol_usd").eq("id", 1).limit(1))[0];

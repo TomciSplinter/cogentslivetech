@@ -388,6 +388,9 @@ body[data-route="bot"] .foot { display: none; }
 .scr-title { display: flex; align-items: center; gap: max(8px, 0.8cqw); min-width: 0; overflow: hidden; }
 .scr-title b { font-size: 1.1em; font-weight: 600; }
 .scr-title .chip { height: auto; padding: 0.25em 0.55em; font-size: 0.85em; }
+.scr-title .chip-smart { display: inline-flex; align-items: center; gap: 0.3em; color: #ffd98a; border-color: rgba(255, 217, 138, 0.35); background: rgba(255, 217, 138, 0.08); }
+.scr-title .chip-smart svg { width: 1em; height: 1em; }
+.smart-dot { color: #ffd98a; }
 .scr-mcap, .scr-chg { color: var(--ink-2); }
 .scr-tf { display: flex; align-items: center; gap: 4px; color: var(--ink-3); font-size: 0.9em; }
 .scr-tf .tf-btn { height: 1.9em; padding: 0 0.6em; border: 1px solid transparent; border-radius: 999px; background: transparent; color: var(--ink-3); font: inherit; cursor: pointer; }

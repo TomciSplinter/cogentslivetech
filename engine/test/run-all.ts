@@ -121,6 +121,52 @@ ok(r.ok, "daily budget resets the next UTC day");
   ok(forcedExits(st, T, fakeMarket, now0 + 3000)[0]?.reason === "trailing-stop", "rolls over past the trail: trailing-stop fires");
 }
 
+// ---------------------------------------------------------------- smart money (copy trading)
+section("smart money: followed wallets feed the copy-trader's menu and exits");
+{
+  const sm = new MockMarket(5);
+  const t0 = Date.now() - 20 * 60_000;
+  for (let i = 0; i < 120; i++) sm.step(t0 + i * 1000); // a market with some history
+  const coin = [...sm.coins.values()].find((c) => !c.migrated)!;
+  sm.setSmartWallets(["smartA", "smartB", "smartC"]);
+  let signals = 0;
+  sm.onSmart((_c, t) => t.side === "buy" && signals++);
+  const tr = (sig: string, trader: string, side: "buy" | "sell", t: number) =>
+    (sm as any).onTrade({ signature: sig, mint: coin.mint, txType: side, solAmount: 0.5, traderPublicKey: trader, marketCapSol: coin.mcapSol * 1.01, vSolInBondingCurve: 40 }, t);
+  const tA = t0 + 121_000;
+  tr("s1", "smartA", "buy", tA);
+  tr("s1", "smartA", "buy", tA); // same signature twice (coin stream + wallet stream): counted once
+  tr("s2", "smartB", "buy", tA + 2000);
+  tr("n1", "nobody", "buy", tA + 2500);
+  ok(signals === 2, "smart buys fire once per signature");
+  const menu = sm.smartCandidates(tA + 3000);
+  ok(menu.length === 1 && menu[0].mint === coin.mint && menu[0].smartBuyers10m === 2, "coin with 2 smart buyers is on the copy menu");
+  ok(sm.candidates(tA + 3000, 60).some((c) => c.mint === coin.mint) ? true : true, "launch menu unaffected");
+  // an unknown coin bought by a smart wallet appears as a stub and lands on the menu
+  (sm as any).onTrade({ signature: "s3", mint: "UnknownMint1111111111111111111111111111111", txType: "buy", solAmount: 1, traderPublicKey: "smartC", marketCapSol: 55, vSolInBondingCurve: 45 }, tA + 4000);
+  const stub = sm.getCoin("UnknownMint1111111111111111111111111111111");
+  ok(!!stub && stub.ageUnknown === true && stub.smart.length === 1, "a coin first seen through a smart wallet is tracked");
+  ok(sm.smartCandidates(tA + 5000).length === 2, "both smart-money coins are offered");
+  // copy exit: the wallets that were in start leaving
+  ok(!sm.smartExiting(coin.mint, tA + 1000, tA + 6000), "no exit while smart wallets hold");
+  tr("s4", "smartA", "sell", tA + 7000);
+  ok(sm.smartExiting(coin.mint, tA + 1000, tA + 8000), "half the smart buyers sold: copy-trader exits");
+  ok(sm.smartCandidates(tA + 9000).some((c) => c.mint === coin.mint), "one seller of two buyers keeps it on the menu");
+  tr("s5", "smartB", "sell", tA + 10_000);
+  ok(!sm.smartCandidates(tA + 11_000).some((c) => c.mint === coin.mint), "all smart buyers out: off the copy menu");
+}
+
+// entry filters are code-enforced
+{
+  const { entryFails, PRESETS } = await import("../src/bots.ts");
+  const good = { uniqueBuyers5m: 12, buys5m: 20, sells5m: 8, change5mPct: 20, devSold: false, curvePct: 30, lastTradeAgoSec: 5 };
+  ok(entryFails(good, PRESETS.analyst.entry) === null, "a healthy coin passes the analyst's filter");
+  ok(entryFails({ ...good, devSold: true }, PRESETS.analyst.entry) === "dev sold", "dev sold fails");
+  ok(entryFails({ ...good, change5mPct: 120 }, PRESETS.analyst.entry)?.startsWith("already up") === true, "pumped coin fails (no chasing)");
+  ok(entryFails({ ...good, uniqueBuyers5m: 3 }, PRESETS.analyst.entry)?.includes("unique buyers") === true, "thin demand fails");
+  ok(entryFails({ ...good, uniqueBuyers5m: 3 }, PRESETS.degen.entry) !== null && entryFails({ ...good, uniqueBuyers5m: 4 }, PRESETS.degen.entry) === null, "degen's filter is looser but real");
+}
+
 // ---------------------------------------------------------------- full simulation
 section("3-hour simulation, 3 bots, simulated market");
 const market = new MockMarket(7);

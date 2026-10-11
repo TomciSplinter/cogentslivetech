@@ -88,6 +88,13 @@ await check("Create-a-bot settings", async () => {
   return notes.length ? `on, but: ${notes.join("; ")}` : `on (max ${config.maxUserBots} bots, ${config.maxBotsPerWallet} per wallet)`;
 });
 
+await check("Smart money (VEGA copies)", async () => {
+  const n = config.smartWallets.length;
+  if (!n) throw new Error("no wallets: add addresses to smart-wallets.txt (one per line)");
+  if (!config.pumpPortalApiKey) throw new Error(`${n} wallets listed, but following them needs PUMPPORTAL_API_KEY`);
+  return `${n} wallets followed`;
+});
+
 await check("Twitch chat", async () => {
   if (!config.twitchChannel) return "off (TWITCH_CHANNEL empty)";
   const ok = await new Promise<boolean>((resolve) => {

@@ -65,7 +65,9 @@ function contextText(ctx: TurnContext): string {
       ? `Coin menu (the ONLY coins you may buy this turn):\n${ctx.menu
           .map(
             (c) =>
-              `- ${c.symbol} (${c.mint}): age ${c.ageMin}m, mcap ${c.mcapSol} SOL, 5m change ${c.change5mPct}%, 5m vol ${c.vol5mSol} SOL, buys/sells ${c.buys5m}/${c.sells5m}, unique buyers ${c.uniqueBuyers5m}, last trade ${c.lastTradeAgoSec}s ago, curve ${c.curvePct}%${c.devSold ? ", DEV SOLD" : ""}`,
+              `- ${c.symbol} (${c.mint}): age ${c.ageUnknown ? "unknown (older coin)" : `${c.ageMin}m`}, mcap ${c.mcapSol} SOL, 5m change ${c.change5mPct}%, 5m vol ${c.vol5mSol} SOL, buys/sells ${c.buys5m}/${c.sells5m}, unique buyers ${c.uniqueBuyers5m}, last trade ${c.lastTradeAgoSec}s ago, curve ${c.curvePct}%${c.devSold ? ", DEV SOLD" : ""}${
+                c.smartBuyers10m || c.smartSellers10m ? `, SMART MONEY: ${c.smartBuyers10m} buyer${c.smartBuyers10m === 1 ? "" : "s"}${c.smartSellers10m ? `, ${c.smartSellers10m} seller${c.smartSellers10m === 1 ? "" : "s"}` : ""}, net ${c.smartNetSol10m >= 0 ? "+" : ""}${c.smartNetSol10m} SOL${c.smartLastBuyAgoSec != null ? `, last smart buy ${c.smartLastBuyAgoSec}s ago` : ""}` : ""
+              }`,
           )
           .join("\n")}`
       : "Coin menu: empty, nothing worth looking at right now.",
@@ -141,7 +143,7 @@ export class ClaudeBrain implements Brain {
       max_tokens: 600,
       system: `${STREAM_RULES}\n\n${bot.persona}\n\nEach turn you look at your wallet and the coin menu and choose ONE action with the decide tool: buy a coin from the menu, sell a bag you hold, or hold. Code enforces your size limits, take-profit, stop-loss and cooldowns, so just say how much you'd like (max ${bot.limits.maxBuySol} SOL). Holding is fine and often smart. Whatever you choose, "say" is what you announce live on stream.
 
-What usually loses money on fresh launches, so avoid it: coins marked DEV SOLD; coins already up more than 100% in the last 5 minutes (you'd be buying the top); coins with more sells than buys or fewer than 4 unique buyers; coins whose last trade was over a minute ago. What tends to work: steadily rising unique buyers, buys clearly outnumbering sells, a curve between 10% and 70%. Size down when unsure.`,
+What usually loses money on fresh launches, so avoid it: coins marked DEV SOLD; coins already up more than 100% in the last 5 minutes (you'd be buying the top); coins with more sells than buys or fewer than 4 unique buyers; coins whose last trade was over a minute ago. What tends to work: steadily rising unique buyers, buys clearly outnumbering sells, a curve between 10% and 70%, and SMART MONEY buying (followed wallets with a profitable record). Size down when unsure.${bot.playbook ? `\n\nYour playbook: ${bot.playbook}` : ""}`,
       messages: [{ role: "user", content: contextText(ctx) }],
       tools: [
         {

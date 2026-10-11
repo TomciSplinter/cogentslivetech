@@ -37,6 +37,7 @@ async function main() {
         const mints = new Set<string>(manager.allHeld());
         for (const b of manager.bots.values()) if (b.watching) mints.add(b.watching);
         market.candidates(Date.now(), 60, 10).forEach((c) => mints.add(c.mint));
+        market.smartCandidates(Date.now(), 6).forEach((c) => mints.add(c.mint));
         const rows: CoinRow[] = [];
         const nowIso = new Date().toISOString();
         for (const m of mints) {
@@ -50,6 +51,7 @@ async function main() {
             price_sol: c.priceSol,
             progress: c.progress,
             created_at: new Date(c.createdAt).toISOString(),
+            smart_buyers: c.smart.length ? market.smartStats(c, Date.now()).buyers.size : 0,
             history: c.history.slice(-180),
             // 5-second bars for tiles and sparklines; the live chart streams 1-second candles from the API
             candles: aggregateCandles(c.candles, 5_000)

@@ -92,6 +92,7 @@ export interface CoinRow {
   created_at: string;
   history: [number, number][];
   candles: [number, number, number, number, number, number][];
+  smart_buyers?: number;
   updated_at: string;
 }
 

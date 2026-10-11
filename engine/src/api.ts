@@ -19,8 +19,9 @@ let liveTotal = 0;
 
 const trim = (ks: Coin["candles"]) => ks.map((k) => [k[0], +k[1].toFixed(3), +k[2].toFixed(3), +k[3].toFixed(3), +k[4].toFixed(3), +k[5].toFixed(3)]);
 
-function coinSummary(c: Coin) {
-  return { mint: c.mint, symbol: c.symbol, name: c.name, mcap_sol: c.mcapSol, price_sol: c.priceSol, progress: c.progress, created_at: new Date(c.createdAt).toISOString() };
+function coinSummary(c: Coin, market?: Market) {
+  const smart = c.smart.length && market ? market.smartStats(c, Date.now()).buyers.size : 0;
+  return { mint: c.mint, symbol: c.symbol, name: c.name, mcap_sol: c.mcapSol, price_sol: c.priceSol, progress: c.progress, created_at: new Date(c.createdAt).toISOString(), smart_buyers: smart };
 }
 
 function liveStream(req: IncomingMessage, res: ServerResponse, market: Market, mint: string, ip: string) {
@@ -46,7 +47,7 @@ function liveStream(req: IncomingMessage, res: ServerResponse, market: Market, m
     const c = market.getCoin(mint);
     if (!c) return void send("history", { now: Date.now(), coin: null, candles: [] });
     known = true;
-    send("history", { now: Date.now(), ms: CANDLE_MS, coin: coinSummary(c), candles: trim(c.candles.slice(-LIVE_HISTORY)) });
+    send("history", { now: Date.now(), ms: CANDLE_MS, coin: coinSummary(c, market), candles: trim(c.candles.slice(-LIVE_HISTORY)) });
   };
   sendHistory();
 
@@ -59,7 +60,7 @@ function liveStream(req: IncomingMessage, res: ServerResponse, market: Market, m
     dirty = false;
     const c = market.getCoin(mint);
     if (!c) return;
-    send("tick", { now: Date.now(), candles: trim(c.candles.slice(-2)), mcap_sol: c.mcapSol, price_sol: c.priceSol, progress: c.progress });
+    send("tick", { now: Date.now(), candles: trim(c.candles.slice(-2)), mcap_sol: c.mcapSol, price_sol: c.priceSol, progress: c.progress, symbol: c.symbol, smart_buyers: c.smart.length ? market.smartStats(c, Date.now()).buyers.size : 0 });
   };
   const unsub = market.onTick((c) => {
     if (c.mint !== mint) return;

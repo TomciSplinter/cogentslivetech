@@ -27,6 +27,7 @@ export class BotManager {
   private brain: Brain;
   private store: Store;
   private timers: ReturnType<typeof setInterval>[] = [];
+  private unsubSmart?: () => void;
   private lastChatId = 0;
   private startedAt = Date.now();
   tvBotId: string | null = null;
@@ -108,6 +109,11 @@ export class BotManager {
     this.twitch.start();
     this.timers.push(setInterval(() => this.schedule(), 5_000));
     this.timers.push(setInterval(() => this.bots.forEach((b) => b.guard()), 4_000));
+    // a followed wallet buys: copy-traders look right away
+    this.unsubSmart = this.market.onSmart((_c, t) => {
+      if (t.side !== "buy") return;
+      for (const b of this.bots.values()) b.onSmartBuy();
+    });
     this.timers.push(setInterval(() => this.chatAndViewers(), 6_000));
     this.timers.push(setInterval(() => this.idle(), 10_000));
     this.timers.push(setInterval(() => this.pickTv().catch((e) => log("tv", e.message)), 30_000));
@@ -116,6 +122,7 @@ export class BotManager {
 
   stop() {
     this.timers.forEach(clearInterval);
+    this.unsubSmart?.();
     this.twitch.stop();
   }
 

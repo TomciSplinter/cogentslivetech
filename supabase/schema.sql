@@ -132,8 +132,10 @@ create table if not exists public.coins (
   history    jsonb not null default '[]',
   updated_at timestamptz not null default now()
 );
--- 15-second candles (open/high/low/close in market cap SOL, plus volume)
+-- 5-second candles (open/high/low/close in market cap SOL, plus volume)
 alter table public.coins add column if not exists candles jsonb not null default '[]';
+-- Smart money: how many followed wallets bought this coin in the last 10 minutes
+alter table public.coins add column if not exists smart_buyers int not null default 0;
 
 -- ------------------------------------------------------------
 -- Chat flood protection: one message per viewer every 2 seconds
