@@ -110,7 +110,8 @@ export class BotManager {
     this.timers.push(setInterval(() => this.schedule(), 5_000));
     this.timers.push(setInterval(() => this.bots.forEach((b) => b.guard()), 4_000));
     // a followed wallet buys: copy-traders look right away
-    this.unsubSmart = this.market.onSmart((_c, t) => {
+    this.unsubSmart = this.market.onSmart((c, t) => {
+      log("smart", `${t.wallet.slice(0, 4)}…${t.wallet.slice(-4)} ${t.side === "buy" ? "bought" : "sold"} ${c.symbol} ${t.sol.toFixed(3)} SOL`);
       if (t.side !== "buy") return;
       for (const b of this.bots.values()) b.onSmartBuy();
     });

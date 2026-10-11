@@ -190,8 +190,8 @@ export class Bot {
   /** Stop-loss, take-profit, trailing stop and max-hold, checked by code (no AI). */
   private async enforceExits(now: number) {
     const exits = forcedExits(this.state, this.def.limits, this.market, now);
-    // copy-traders leave when the wallets they followed leave
-    if ((this.def.strategy ?? "launches") === "copy") {
+    // bots that follow smart money leave a coin when the wallets they followed into it leave
+    if ((this.def.strategy ?? "launches") !== "launches") {
       for (const p of this.state.positions.values()) {
         if (exits.some((x) => x.mint === p.mint)) continue;
         if (this.market.smartExiting(p.mint, p.openedAt, now)) exits.push({ mint: p.mint, reason: "smart-exit" });

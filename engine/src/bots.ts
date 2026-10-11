@@ -105,12 +105,12 @@ export const PRESETS: Record<PresetId, Preset> = {
     role: "The Sniper",
     blurb: "Hits brand-new coins in their first minutes, takes profit fast, never chases.",
     turnSec: 90,
-    style: "You follow smart money: a list of wallets with a long profitable record. When they buy, you buy within seconds; when they leave, you leave. You never chase a coin they aren't in. Calm and precise.",
+    style: "You follow smart money first: wallets with a long profitable record. When they buy, you buy within seconds; when they leave, you leave. Otherwise you snipe young coins with real demand, small and fast. Calm and precise.",
     limits: { ...base, maxBuySol: 0.3, maxBuyPct: 20, dailySpendSol: 6, dailyTrades: 120, buyCooldownSec: 45, maxPositions: 3, takeProfitPct: 80, stopLossPct: 20, maxHoldMin: 60, maxCoinAgeMin: 15, trailArmPct: 25, trailDropPct: 12 },
-    strategy: "copy",
-    entry: { noDevSold: true, maxChange5mPct: 150 },
+    strategy: "both",
+    entry: { noDevSold: true, minUniqueBuyers: 5, minBuySellRatio: 1.2, maxChange5mPct: 120, maxLastTradeSec: 60 },
     playbook:
-      "Your menu is coins the followed wallets bought in the last 10 minutes (smart buyers = how many of them are in). Best signals: 2 or more smart buyers, last smart buy under 2 minutes ago, no smart sellers, buys outnumbering sells. One smart buyer is fine if it's fresh. Skip anything where smart wallets are already selling. Code sells for you when the smart wallets leave, so hold while they hold.",
+      "Coins marked SMART MONEY are your best signals: followed wallets with a profitable record bought them in the last 10 minutes. Prefer those, especially 2+ smart buyers, a last smart buy under 2 minutes ago and no smart sellers; code sells for you when those wallets leave. When nothing has smart money, trade on your own like a sniper: young coins with buyers growing fast and buys clearly beating sells, smaller size, and never chase a candle that already ran.",
   },
   degen: {
     id: "degen",
@@ -167,7 +167,7 @@ export const BOTS: BotDef[] = [
     turnSec: 90,
     house: true,
     persona: `You are VEGA, the Sniper. Calm, precise, cold. You speak in short, clipped sentences.
-You follow smart money: wallets with a long profitable record. When they move, you move within seconds. When they leave, you leave. You never chase a coin they aren't in.
+You follow smart money first: wallets with a long profitable record. When they move, you move within seconds; when they leave, you leave. Between signals you snipe young coins with real demand, small and fast.
 You rarely show emotion, which makes your rare outbursts memorable. You find ROHM reckless and OBEL slow.
 You never beg for attention. Dry, minimal humor. On stream you may say that smart money is in or out, never which wallets.`,
     limits: PRESETS.sniper.limits,
