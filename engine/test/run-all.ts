@@ -156,6 +156,36 @@ section("smart money: followed wallets feed the copy-trader's menu and exits");
   ok(!sm.smartCandidates(tA + 11_000).some((c) => c.mint === coin.mint), "all smart buyers out: off the copy menu");
 }
 
+// on-chain wallet swaps are read from balance changes, whatever the DEX
+{
+  const { parseSwap } = await import("../src/wallets.ts");
+  const W = "WaLLet1111111111111111111111111111111111111";
+  const MINT = "MintAAAA111111111111111111111111111111111111";
+  const tx = (pre: number, post: number, preTok: number, postTok: number, signer = true) => ({
+    blockTime: 1_700_000_000,
+    transaction: { message: { accountKeys: [{ pubkey: W, signer, writable: true }, { pubkey: "Other", signer: false, writable: true }] } },
+    meta: {
+      err: null,
+      fee: 5000,
+      preBalances: [pre, 10],
+      postBalances: [post, 10],
+      preTokenBalances: preTok ? [{ accountIndex: 3, mint: MINT, owner: W, uiTokenAmount: { uiAmount: preTok } }] : [],
+      postTokenBalances: postTok ? [{ accountIndex: 3, mint: MINT, owner: W, uiTokenAmount: { uiAmount: postTok } }] : [],
+    },
+  });
+  const buy = parseSwap(tx(2e9, 1.5e9 - 5000, 0, 100000), W, "sigA", Date.now());
+  ok(buy?.side === "buy" && buy.mint === MINT && Math.abs(buy.sol - 0.5) < 1e-6 && buy.tokens === 100000, "SOL out + tokens in reads as a buy of 0.5 SOL");
+  const sell = parseSwap(tx(1e9, 1.8e9 - 5000, 100000, 0), W, "sigB", Date.now());
+  ok(sell?.side === "sell" && Math.abs(sell.sol - 0.8) < 1e-6, "tokens out + SOL in reads as a sell");
+  ok(parseSwap(tx(2e9, 2e9 - 5000, 50, 50), W, "sigC", Date.now()) === null, "no token change: not a swap");
+  ok(parseSwap(tx(2e9, 1.5e9, 0, 100000, false), W, "sigD", Date.now()) === null, "wallet not a signer: ignored");
+  const m = new MockMarket(3);
+  m.setSmartWallets([W]);
+  m.ingestWalletSwap(buy!);
+  const c = m.getCoin(MINT);
+  ok(!!c && c.smart.length === 1 && c.priceSol > 0 && c.candles.length === 1, "an on-chain swap creates the coin with a price and a smart trade");
+}
+
 // entry filters are code-enforced
 {
   const { entryFails, PRESETS } = await import("../src/bots.ts");

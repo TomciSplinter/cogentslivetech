@@ -91,8 +91,10 @@ await check("Create-a-bot settings", async () => {
 await check("Smart money (VEGA copies)", async () => {
   const n = config.smartWallets.length;
   if (!n) throw new Error("no wallets: add addresses to smart-wallets.txt (one per line)");
-  if (!config.pumpPortalApiKey) throw new Error(`${n} wallets listed, but following them needs PUMPPORTAL_API_KEY`);
-  return `${n} wallets followed`;
+  if (!config.solanaRpcUrl) throw new Error(`${n} wallets listed, but following them on-chain needs SOLANA_RPC_URL`);
+  const { probeWalletStream } = await import("../src/wallets.ts");
+  await probeWalletStream(config.solanaRpcUrl, config.smartWallets[0]);
+  return `${n} wallets followed on-chain`;
 });
 
 await check("Twitch chat", async () => {

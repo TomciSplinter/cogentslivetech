@@ -8,6 +8,7 @@ import { createBrain } from "./brain.ts";
 import { config, describeConfig } from "./config.ts";
 import { BotManager } from "./manager.ts";
 import { aggregateCandles, createMarket } from "./market.ts";
+import { WalletWatcher } from "./wallets.ts";
 import { hasMasterKey } from "./secrets.ts";
 import { createStore, type CoinRow } from "./store.ts";
 import { log } from "./util.ts";
@@ -25,6 +26,13 @@ async function main() {
   await manager.load();
   market.start();
   manager.start();
+
+  // smart money: follow the wallets on-chain through the RPC websocket (any DEX, not just pump.fun)
+  let wallets: WalletWatcher | undefined;
+  if (config.smartWallets.length && config.solanaRpcUrl) {
+    wallets = new WalletWatcher(config.solanaRpcUrl, config.smartWallets, (s) => market.ingestWalletSwap(s));
+    wallets.start();
+  }
 
   const timers: ReturnType<typeof setInterval>[] = [];
 
@@ -90,6 +98,7 @@ async function main() {
 
   const shutdown = () => {
     log("cogents", "shutting down");
+    wallets?.stop();
     timers.forEach(clearInterval);
     manager.stop();
     market.stop();

@@ -136,6 +136,12 @@ export abstract class Market {
     if (this.seenSigs.length > 5000) this.seenSigSet.delete(this.seenSigs.shift()!);
     return false;
   }
+  /** A followed wallet's swap seen on-chain (any DEX): feed it in like a trade event. */
+  ingestWalletSwap(s: { signature: string; wallet: string; mint: string; side: "buy" | "sell"; sol: number; tokens: number; priceSol: number; t: number }) {
+    const mcap = s.priceSol > 0 ? s.priceSol * TOTAL_SUPPLY : undefined;
+    this.onTrade({ signature: s.signature, mint: s.mint, txType: s.side, solAmount: s.sol, tokenAmount: s.tokens, traderPublicKey: s.wallet, marketCapSol: mcap }, Date.now());
+  }
+
   /** Smart-money view of a coin over the last `windowMs`. */
   smartStats(c: Coin, now: number, windowMs = 10 * 60_000) {
     const recent = c.smart.filter((t) => now - t.t <= windowMs);
