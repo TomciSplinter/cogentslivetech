@@ -152,12 +152,15 @@ export class Bot {
   menu(now: number) {
     const strat = this.def.strategy ?? "launches";
     let list = [];
+    // take a wide slice of the market and let the entry filter choose: ranking first and filtering after
+    // would hand a picky bot ten brand-new launches and nothing that fits its playbook
+    const wide = this.def.entry ? 40 : 10;
     if (strat === "copy") list = this.market.smartCandidates(now, 8);
     else if (strat === "both") {
       const smart = this.market.smartCandidates(now, 4);
       const seen = new Set(smart.map((c) => c.mint));
-      list = [...smart, ...this.market.candidates(now, this.def.limits.maxCoinAgeMin, 10).filter((c) => !seen.has(c.mint))];
-    } else list = this.market.candidates(now, this.def.limits.maxCoinAgeMin, 10);
+      list = [...smart, ...this.market.candidates(now, this.def.limits.maxCoinAgeMin, wide).filter((c) => !seen.has(c.mint))];
+    } else list = this.market.candidates(now, this.def.limits.maxCoinAgeMin, wide);
     // a smart-money coin passes with the light filter: the followed wallet is the demand signal, and a coin
     // first seen through its trade has no crowd stats yet
     const f = this.def.entry;
@@ -178,6 +181,8 @@ export class Bot {
     return menu;
   }
   private lastMenuLog = 0;
+  /** Tokens that landed in the real wallet without being bought (airdrops): never traded, never counted. */
+  private ignoredMints = new Set<string>();
 
   private context(now: number, menu = this.menu(now)): TurnContext {
     const s = this.state;
@@ -420,6 +425,14 @@ export class Bot {
     if (!this.exec.holdings) return;
     const chain = await this.exec.holdings();
     for (const p of [...this.state.positions.values()]) {
+      // a bag with no cost and no market data is an airdropped scam token adopted by an earlier check: drop it
+      if (p.costSol === 0 && !this.market.getCoin(p.mint)) {
+        this.state.positions.delete(p.mint);
+        await this.store.deletePosition(this.def.id, p.mint);
+        this.ignoredMints.add(p.mint);
+        log(this.def.id, `wallet check: ${p.symbol} (${p.mint.slice(0, 6)}…) was airdropped, not bought; ignoring it`);
+        continue;
+      }
       if (!(chain.get(p.mint)! > 0)) {
         this.state.positions.delete(p.mint);
         await this.store.deletePosition(this.def.id, p.mint);
@@ -430,10 +443,17 @@ export class Bot {
       }
     }
     for (const [mint, tokens] of chain) {
-      if (this.state.positions.has(mint) || !(tokens > 0)) continue;
+      if (this.state.positions.has(mint) || !(tokens > 0) || this.ignoredMints.has(mint)) continue;
       const coin = this.market.getCoin(mint);
-      const price = coin?.priceSol ?? 0;
-      const p: Position = { mint, symbol: coin?.symbol ?? "???", tokens, costSol: tokens * price, entryPrice: price, openedAt: now };
+      // Fresh wallets get spam-airdropped scam tokens all day. A token the market has never seen and the
+      // bot never bought is one of those: not a bag, and it must not take up a position slot.
+      if (!coin) {
+        this.ignoredMints.add(mint);
+        log(this.def.id, `wallet check: unknown token ${mint.slice(0, 6)}… appeared in the wallet (airdrop); ignoring it`);
+        continue;
+      }
+      const price = coin.priceSol ?? 0;
+      const p: Position = { mint, symbol: coin.symbol, tokens, costSol: tokens * price, entryPrice: price, openedAt: now };
       this.state.positions.set(mint, p);
       await this.store.upsertPosition({ bot_id: this.def.id, mint, symbol: p.symbol, tokens, cost_sol: p.costSol, entry_price: price, opened_at: new Date(now).toISOString() });
       log(this.def.id, `wallet check: found ${p.symbol} in the wallet, now tracking it`);

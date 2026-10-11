@@ -209,9 +209,13 @@ ok(Math.abs(bot.state.solBalance - Number(bal(addr)) / 1e9) < 1e-9, "balance sti
 
 section("wallet check fixes records");
 const orphan = "Orphan1111111111111111111111111111111pump";
+(market as any).onCreate({ mint: orphan, symbol: "ORPH", marketCapSol: 40 }, Date.now());
 tokenAccounts.set(base58Encode(new Uint8Array(randomBytes(32))), { owner: addr, mint: orphan, amount: 5_000_000_000n });
+const spam = "Spam11111111111111111111111111111111111111";
+tokenAccounts.set(base58Encode(new Uint8Array(randomBytes(32))), { owner: addr, mint: spam, amount: 1_000_000_000_000n });
 await bot.reconcile(Date.now());
 ok(bot.state.positions.has(orphan), "tokens that arrived after a timed-out buy are picked up");
+ok(!bot.state.positions.has(spam), "an airdropped token the market has never seen is not a position");
 for (const [k, t] of tokenAccounts) if (t.mint === orphan) t.amount = 0n;
 await bot.reconcile(Date.now());
 ok(!bot.state.positions.has(orphan), "bags no longer in the wallet are dropped from records");
