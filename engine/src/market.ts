@@ -40,6 +40,8 @@ export interface Coin {
   smart: SmartTrade[]; // trades by followed wallets (last 60 min)
   ageUnknown?: boolean; // first seen through a smart wallet's trade, not at launch
   metaPending?: boolean;
+  /** Stats from DexScreener for coins we aren't streaming (refreshed every ~20s). */
+  ext?: { t: number; vol5mSol: number; buys5m: number; sells5m: number; change5mPct: number };
 }
 
 /** [bucket start ms, open, high, low, close, volume SOL]; prices are market cap in SOL. */
@@ -143,6 +145,31 @@ export abstract class Market {
     this.onTrade({ signature: s.signature, mint: s.mint, txType: s.side, solAmount: s.sol, tokenAmount: s.tokens, traderPublicKey: s.wallet, marketCapSol: mcap }, Date.now());
   }
 
+  /** Stats from DexScreener for a coin we aren't streaming. */
+  applyExt(mint: string, e: { mcapSol?: number; vol5mSol: number; buys5m: number; sells5m: number; change5mPct: number }, now: number) {
+    const c = this.coins.get(mint);
+    if (!c) return;
+    c.ext = { t: now, vol5mSol: e.vol5mSol, buys5m: e.buys5m, sells5m: e.sells5m, change5mPct: e.change5mPct };
+    if (e.mcapSol && e.mcapSol > 0 && now - c.lastTradeAt > 30_000) {
+      c.mcapSol = e.mcapSol;
+      c.priceSol = e.mcapSol / TOTAL_SUPPLY;
+    }
+  }
+  /** Young coins we don't stream right now: candidates for an outside stats refresh. */
+  coinsNeedingStats(now: number, maxAgeMin = 180, limit = 30): string[] {
+    const out: { mint: string; score: number }[] = [];
+    for (const c of this.coins.values()) {
+      if (c.migrated || now - c.createdAt > maxAgeMin * 60_000) continue;
+      if (now - c.lastTradeAt < 60_000) continue; // streaming, fresh enough
+      if (c.ext && now - c.ext.t < 20_000) continue;
+      out.push({ mint: c.mint, score: c.mcapSol });
+    }
+    return out
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
+      .map((x) => x.mint);
+  }
+
   /** A price from an outside source (Jupiter) for a coin we don't get a trade stream for. */
   applyPrice(mint: string, priceSol: number, now: number) {
     const c = this.coins.get(mint);
@@ -238,6 +265,28 @@ export abstract class Market {
     const buys = recent.filter((t) => t.side === "buy");
     const old = c.history.find(([t]) => t >= cutoff);
     const ref = old ? old[1] : c.history[0]?.[1] ?? c.priceSol;
+    // not streaming this coin, but DexScreener told us about it recently: use those numbers
+    const streaming = recent.length && now - c.lastTradeAt < 60_000;
+    if (!streaming && c.ext && now - c.ext.t < 90_000) {
+      const e = c.ext;
+      return {
+        mint: c.mint,
+        symbol: c.symbol,
+        name: c.name,
+        ageMin: round((now - c.createdAt) / 60_000, 1),
+        mcapSol: round(c.mcapSol, 1),
+        change5mPct: e.change5mPct,
+        vol5mSol: e.vol5mSol,
+        buys5m: e.buys5m,
+        sells5m: e.sells5m,
+        uniqueBuyers5m: Math.round(e.buys5m * 0.6), // distinct buyers aren't reported; a conservative guess
+        lastTradeAgoSec: e.buys5m + e.sells5m > 0 ? Math.min(30, Math.round((now - e.t) / 1000)) : 999,
+        curvePct: round(c.progress, 1),
+        devSold: c.devSold,
+        ageUnknown: c.ageUnknown,
+        ...this.smartSummary(c, now),
+      };
+    }
     return {
       mint: c.mint,
       symbol: c.symbol,
@@ -305,7 +354,8 @@ export abstract class Market {
       if (c.migrated) continue;
       const ageMin = (now - c.createdAt) / 60_000;
       if (ageMin > maxAgeMin) continue;
-      if (now - c.lastTradeAt > 5 * 60_000) continue;
+      const extFresh = c.ext && now - c.ext.t < 90_000 && c.ext.buys5m + c.ext.sells5m > 0;
+      if (now - c.lastTradeAt > 5 * 60_000 && !extFresh) continue;
       out.push(this.stats(c, now));
     }
     // real interest first: distinct buyers beat raw volume (one whale or the dev can fake volume);
@@ -525,11 +575,12 @@ export class PumpPortalMarket extends Market {
     const want = new Set<string>(this.held);
     // coins smart money touched in the last 10 minutes: stream them so the chart and exits are live
     for (const c of this.coins.values()) if (c.smart.length && now - c.smart[c.smart.length - 1].t < 10 * 60_000 && !c.migrated) want.add(c.mint);
-    const newest = [...this.coins.values()]
-      .filter((c) => !c.migrated)
-      .sort((a, b) => b.createdAt - a.createdAt)
-      .slice(0, config.watchlistSize);
-    for (const c of newest) want.add(c.mint);
+    const live = [...this.coins.values()].filter((c) => !c.migrated);
+    // half the watchlist: the newest launches; the other half: the biggest coins under 3 hours old
+    // (the ones that grew past launch and that the analyst-style bots look for)
+    const half = Math.max(5, Math.floor(config.watchlistSize / 2));
+    for (const c of [...live].sort((a, b) => b.createdAt - a.createdAt).slice(0, half)) want.add(c.mint);
+    for (const c of live.filter((c) => now - c.createdAt < 3 * 3600_000 && now - c.lastTradeAt < 10 * 60_000).sort((a, b) => b.mcapSol - a.mcapSol).slice(0, half)) want.add(c.mint);
 
     const add = [...want].filter((m) => !this.subscribed.has(m));
     const drop = [...this.subscribed].filter((m) => !want.has(m));

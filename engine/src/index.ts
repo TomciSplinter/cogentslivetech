@@ -3,7 +3,7 @@
 //   npm start        → live pump.fun data
 //   npm run demo     → simulated market (free, for testing)
 import { startApi } from "./api.ts";
-import { fetchSolUsd, fetchTokenPricesSol } from "./solprice.ts";
+import { fetchDexStats, fetchSolUsd, fetchTokenPricesSol, solUsdNow } from "./solprice.ts";
 import { createBrain } from "./brain.ts";
 import { config, describeConfig } from "./config.ts";
 import { BotManager } from "./manager.ts";
@@ -87,6 +87,19 @@ async function main() {
       }, 5_000),
     );
   }
+
+  // young coins that fell off the trade stream: refresh their stats from DexScreener so the
+  // analyst-style bots can still find the ones that grew (market cap, volume, buys/sells)
+  timers.push(
+    setInterval(async () => {
+      const solUsd = solUsdNow();
+      const mints = market.coinsNeedingStats(Date.now());
+      if (!mints.length || !solUsd) return;
+      const stats = await fetchDexStats(mints, solUsd);
+      const now = Date.now();
+      for (const [m, e] of stats) market.applyExt(m, e, now);
+    }, 20_000),
+  );
 
   // SOL price in USD, so the website can show market caps in dollars
   const pushSolUsd = async () => {
