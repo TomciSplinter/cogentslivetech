@@ -207,6 +207,12 @@ buy on VEGA's menu within seconds, and sells when they sell. To change the list:
 `npm run check-keys` shows how many wallets are followed, and `npm run wallets` prints a scorecard per wallet (how the bots did when they copied it), so you can prune the list with numbers. Coins with smart money show a gold **Smart money ×N**
 badge on the site. Each followed wallet costs one RPC websocket subscription plus one `getTransaction` per trade they make.
 
+### Fresh start for practice bots
+
+`npm run reset-paper` (in `engine/`) puts every practice bot back to its starting SOL with P&L, wins/losses and
+volume at zero and open bags dropped; `npm run reset-paper -- vega` resets one bot. Then `pm2 restart cogents`.
+Real-money bots are never touched; trade history stays in the database.
+
 ### Engine commands
 
 | What | Command |
