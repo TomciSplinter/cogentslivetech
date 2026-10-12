@@ -47,7 +47,11 @@ export class BotManager {
   // ------------------------------------------------------------ startup
 
   async load() {
-    for (const def of BOTS) await this.startBot(def, this.houseExecutor(def));
+    for (const def of BOTS) {
+      // BOT_<ID>_PAUSED=true in .env benches a house bot: no new buys, open bags still get their exits
+      if (/^(true|1|yes)$/i.test(botEnv(def.id, "PAUSED"))) log(def.id, "paused by BOT_" + def.id.toUpperCase() + "_PAUSED");
+      await this.startBot({ ...def, paused: /^(true|1|yes)$/i.test(botEnv(def.id, "PAUSED")) }, this.houseExecutor(def));
+    }
     if (config.userBotsEnabled) {
       for (const row of await this.store.listUserBots()) {
         if (row.status === "deleted") continue;

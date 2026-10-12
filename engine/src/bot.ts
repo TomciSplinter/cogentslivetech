@@ -247,7 +247,8 @@ export class Bot {
 
   /** Runs every few seconds between AI turns, so a dump doesn't wait for the next turn. */
   async guard(now = Date.now()) {
-    if (this.busy || this.def.paused || !this.state.positions.size) return;
+    // a paused bot makes no new buys, but its open bags keep their stop-loss and take-profit
+    if (this.busy || !this.state.positions.size) return;
     this.busy = true;
     try {
       await this.enforceExits(now);
