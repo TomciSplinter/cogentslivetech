@@ -10,6 +10,9 @@ import { checkBuy, checkSell, forcedExits, newState, positionPnlPct, recordBuy, 
 import { speak } from "./voice.ts";
 import { dayStart, log, round } from "./util.ts";
 
+/** A paper bag marked above this many times its cost is a feed glitch, never a real fill. */
+const MAX_PAPER_GAIN = 30;
+
 /** Shared, short log of what every bot did, so they can react to each other. */
 export const floorLog: { t: number; botId: string; text: string }[] = [];
 function pushFloor(botId: string, text: string, now: number) {
@@ -181,6 +184,7 @@ export class Bot {
     return menu;
   }
   private lastMenuLog = 0;
+  private lastBadMarkLog = 0;
   /** Tokens that landed in the real wallet without being bought (airdrops): never traded, never counted. */
   private ignoredMints = new Set<string>();
 
@@ -358,6 +362,18 @@ export class Bot {
   }
 
   private async sell(p: Position, reason: string, now: number): Promise<boolean> {
+    // paper money: a fill worth more than MAX_PAPER_GAIN× what was paid is a bad price, not a win.
+    // (Real sells are priced by the chain, so they can't be fooled this way.)
+    if (this.exec.mode !== "real" && p.costSol > 0) {
+      const mark = (this.market.priceOf(p.mint) ?? 0) * p.tokens;
+      if (mark > MAX_PAPER_GAIN * p.costSol) {
+        if (now - this.lastBadMarkLog > 60_000) {
+          this.lastBadMarkLog = now;
+          log(this.def.id, `not selling ${p.symbol}: marked at ${(mark / p.costSol).toFixed(0)}x cost, which is a bad price, not a win`);
+        }
+        return false;
+      }
+    }
     try {
       const r = await this.exec.sell(p);
       const pnl = r.solReceived - p.costSol;

@@ -42,6 +42,8 @@ export interface Coin {
   metaPending?: boolean;
   /** Price so far comes only from one followed wallet's fill; bots can't trade on it until a real source confirms it. */
   priceProvisional?: boolean;
+  /** A price reading far from the current one, waiting to be repeated before it is believed. */
+  suspect?: { mcap: number; t: number; n: number };
   /** Stats from DexScreener for coins we aren't streaming (refreshed every ~20s). */
   ext?: { t: number; vol5mSol: number; buys5m: number; sells5m: number; change5mPct: number };
 }
@@ -49,6 +51,8 @@ export interface Coin {
 /** [bucket start ms, open, high, low, close, volume SOL]; prices are market cap in SOL. */
 export type Candle = [number, number, number, number, number, number];
 export const CANDLE_MS = 1_000;
+/** A single reading may not move a price more than this many times; bigger moves must repeat. */
+const MAX_JUMP = 20;
 const MAX_CANDLES = 1800; // 30 minutes of 1-second candles
 
 /** Merge candles into coarser buckets (e.g. 5s bars for the database snapshot). */
@@ -147,12 +151,41 @@ export abstract class Market {
     this.onTrade({ signature: s.signature, mint: s.mint, txType: s.side, solAmount: s.sol, tokenAmount: s.tokens, traderPublicKey: s.wallet, marketCapSol: mcap, source: "wallet" }, Date.now());
   }
 
+  /**
+   * The one gate every price goes through. A reading more than MAX_JUMP× away from the current price
+   * is not believed on its own: one glitched message from a feed must not reprice a coin 200,000× and
+   * trigger every bot's take-profit on a fortune that doesn't exist. The jump is accepted once the same
+   * level is reported again (a real 50× pump repeats itself within seconds; a glitch doesn't).
+   */
+  protected acceptPrice(c: Coin, mcap: number, source: string, now: number): boolean {
+    if (!(mcap > 0)) return false;
+    if (!(c.mcapSol > 0) || c.priceProvisional) return true;
+    const ratio = mcap / c.mcapSol;
+    if (ratio < MAX_JUMP && ratio > 1 / MAX_JUMP) {
+      c.suspect = undefined;
+      return true;
+    }
+    const s = c.suspect;
+    if (s && now - s.t < 60_000 && mcap / s.mcap < 2 && s.mcap / mcap < 2) {
+      s.n++;
+      if (s.n >= 3) {
+        log("market", `${c.symbol}: price moved ${ratio.toFixed(1)}x, confirmed by ${s.n} readings (${source})`);
+        c.suspect = undefined;
+        return true;
+      }
+      return false;
+    }
+    c.suspect = { mcap, t: now, n: 1 };
+    log("market", `${c.symbol}: ignoring a ${ratio > 1 ? ratio.toFixed(0) + "x" : "1/" + (1 / ratio).toFixed(0)} price jump from ${source} (${c.mcapSol.toFixed(1)} → ${mcap.toFixed(1)} SOL mcap) until it repeats`);
+    return false;
+  }
+
   /** Stats from DexScreener for a coin we aren't streaming. */
   applyExt(mint: string, e: { mcapSol?: number; vol5mSol: number; buys5m: number; sells5m: number; change5mPct: number }, now: number) {
     const c = this.coins.get(mint);
     if (!c) return;
     c.ext = { t: now, vol5mSol: e.vol5mSol, buys5m: e.buys5m, sells5m: e.sells5m, change5mPct: e.change5mPct };
-    if (e.mcapSol && e.mcapSol > 0 && (c.priceProvisional || now - c.lastTradeAt > 30_000)) {
+    if (e.mcapSol && e.mcapSol > 0 && (c.priceProvisional || now - c.lastTradeAt > 30_000) && this.acceptPrice(c, e.mcapSol, "dexscreener", now)) {
       c.mcapSol = e.mcapSol;
       c.priceSol = e.mcapSol / TOTAL_SUPPLY;
       c.priceProvisional = false;
@@ -178,6 +211,7 @@ export abstract class Market {
     const c = this.coins.get(mint);
     if (!c || !(priceSol > 0)) return;
     const mcap = priceSol * TOTAL_SUPPLY;
+    if (!this.acceptPrice(c, mcap, "jupiter", now)) return;
     c.priceProvisional = false;
     if (Math.abs(mcap - c.mcapSol) / (c.mcapSol || 1) < 1e-6) return;
     c.priceSol = priceSol;
@@ -458,7 +492,7 @@ export abstract class Market {
     // One wallet's fill can only nudge a confirmed price, never replace it with something 5x off:
     // a partial fill, a routed swap or an airdrop read as a trade would otherwise poison every bot's P&L.
     const trusted = e.source !== "wallet" || c.priceProvisional || (c.mcapSol > 0 && mcap / c.mcapSol < 5 && c.mcapSol / mcap < 5);
-    if (mcap > 0 && trusted) {
+    if (mcap > 0 && trusted && this.acceptPrice(c, mcap, e.source === "wallet" ? "wallet" : `stream${e.pool ? ":" + e.pool : ""}`, now)) {
       c.mcapSol = mcap;
       c.priceSol = mcap / TOTAL_SUPPLY;
       if (e.source !== "wallet") c.priceProvisional = false;

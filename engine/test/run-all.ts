@@ -486,5 +486,22 @@ ok(parsePrivmsg(":tmi.twitch.tv 001 justinfan :Welcome") === undefined, "ignores
   ok(m.biggestYoung(now).some((c) => c.symbol === "SEEDA"), "it counts among the biggest young coins to remember");
 }
 
+// a single wild price reading is not believed; a repeated one is
+{
+  const m = new MockMarket(2);
+  const now = Date.now();
+  const mint = "Jumpy111111111111111111111111111111111111111";
+  (m as any).onCreate({ mint, symbol: "JUMPY", marketCapSol: 40 }, now);
+  (m as any).onTrade({ signature: "j1", mint, txType: "buy", solAmount: 0.5, traderPublicKey: "x1", marketCapSol: 42 }, now + 1000);
+  (m as any).onTrade({ signature: "j2", mint, txType: "buy", solAmount: 0.5, traderPublicKey: "x2", marketCapSol: 9_000_000 }, now + 2000);
+  ok(m.getCoin(mint)!.mcapSol === 42, "a 200,000x price spike from the stream is ignored");
+  m.applyPrice(mint, 9_000_000 / 1e9, now + 3000);
+  ok(m.getCoin(mint)!.mcapSol === 42, "the same spike from Jupiter is still ignored");
+  (m as any).onTrade({ signature: "j3", mint, txType: "sell", solAmount: 0.1, traderPublicKey: "x3", marketCapSol: 45 }, now + 4000);
+  ok(m.getCoin(mint)!.mcapSol === 45, "ordinary moves still go through");
+  for (let i = 0; i < 3; i++) (m as any).onTrade({ signature: `k${i}`, mint, txType: "buy", solAmount: 2, traderPublicKey: `y${i}`, marketCapSol: 1500 + i }, now + 5000 + i * 500);
+  ok(m.getCoin(mint)!.mcapSol === 1502, "a real 30x pump is accepted once three readings agree");
+}
+
 console.log(`\n${failed ? "❌" : "✅"} ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);
