@@ -75,6 +75,16 @@ const signed = (n, d) => `${n >= 0 ? "+" : "−"}${num(Math.abs(n), d ?? solDigi
 const pct = (n, d = 1) => `${n >= 0 ? "+" : "−"}${num(Math.abs(n), d)}%`;
 const tone = (n) => (n > 0 ? "up" : n < 0 ? "down" : "flat");
 const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
+/** A trade's reason for the log: "smart:<wallet>" becomes a short ★ tag with the full address on hover. */
+function reasonNode(reason) {
+  if (!reason || reason === "ai") return h("span", { class: "res muted" }, "");
+  if (reason.startsWith("smart:")) {
+    const w = reason.slice(6);
+    return h("span", { class: "res smart-dot", title: `Copied smart money: ${w}` }, `★ ${w.slice(0, 4)}…${w.slice(-4)}`);
+  }
+  if (reason.startsWith("void:")) return h("span", { class: "res muted" }, "Voided");
+  return h("span", { class: "res muted" }, cap(reason));
+}
 function ago(isoStr) {
   const s = Math.max(0, (Date.now() - Date.parse(isoStr)) / 1000);
   if (s < 10) return "just now";
@@ -1406,7 +1416,7 @@ async function streamView(id) {
           h("span", { class: "side" }, t.side === "buy" ? "Bought" : "Sold"),
           h("span", { class: "sym" }, `$${t.symbol}`),
           h("span", { class: "amt" }, sol(t.sol)),
-          t.side === "sell" && t.pnl_sol != null ? h("span", { class: `res ${tone(Number(t.pnl_sol))}` }, signed(Number(t.pnl_sol))) : h("span", { class: "res muted" }, t.reason && t.reason !== "ai" ? cap(t.reason) : ""),
+          t.side === "sell" && t.pnl_sol != null ? h("span", { class: `res ${tone(Number(t.pnl_sol))}` }, signed(Number(t.pnl_sol))) : reasonNode(t.reason),
           t.tx ? h("a", { class: "when", href: `https://solscan.io/tx/${t.tx}`, target: "_blank", rel: "noopener" }, ago(t.created_at)) : h("time", { class: "when", datetime: t.created_at }, ago(t.created_at)),
         ),
       );
