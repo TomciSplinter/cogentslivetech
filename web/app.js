@@ -1168,6 +1168,18 @@ function buildPlayer(bot, { tv = false, chat = false } = {}) {
         lastChart = { mint: focus, candles: coin?.candles ?? [], opts: { entry: position ? Number(position.entry_price) * 1e9 : undefined, marks }, position, row };
         draw();
         paintTitle();
+      } else if (pos.length) {
+        // in a trade but no chart data yet (price feed catching up): show the bag, never "scanning"
+        const p = pos[0];
+        lastChart = null;
+        chartHost.hidden = true;
+        chartHost.replaceChildren();
+        scanner.hidden = false;
+        tfChip.textContent = "";
+        scrTitle.replaceChildren(h("b", {}, `Holding $${p.symbol}`), h("span", { class: "scan-dot" }));
+        scanner.replaceChildren(
+          h("li", {}, h("b", {}, `$${p.symbol}`), h("span", { class: "muted" }, `in since ${age(p.opened_at)} ago`), h("span", {}, `${Number(p.cost_sol).toFixed(3)} SOL in`), h("span", { class: "muted" }, "waiting for live price…")),
+        );
       } else {
         lastChart = null;
         chartHost.hidden = true;

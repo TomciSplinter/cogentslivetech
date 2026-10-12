@@ -285,6 +285,15 @@ export abstract class Market {
   /** Coins the bots currently hold: always keep these updated. */
   setHeld(mints: string[]) {
     this.held = new Set(mints);
+    // a bag with no candles yet gets two right away (entry and now), so its chart can draw at once
+    const now = Date.now();
+    for (const m of mints) {
+      const c = this.coins.get(m);
+      if (c && c.mcapSol > 0 && c.candles.length < 2) {
+        if (!c.candles.length) addToCandles(c, now - CANDLE_MS, c.mcapSol, 0);
+        addToCandles(c, now, c.mcapSol, 0);
+      }
+    }
     this.syncSubscriptions();
   }
   protected syncSubscriptions() {}
@@ -524,7 +533,17 @@ export abstract class Market {
   housekeeping(now: number) {
     for (const [mint, c] of this.coins) {
       const last = c.history[c.history.length - 1];
-      if (!last || now - last[0] >= 10_000) c.history.push([now, c.priceSol]);
+      if (!last || now - last[0] >= 10_000) {
+        c.history.push([now, c.priceSol]);
+        // a held coin always has a chart: when no trades are streaming (a remembered coin, a quiet one, an
+        // off-curve one priced from outside), mark its current price as a zero-volume candle so the
+        // bot's page shows the bag instead of falling back to "scanning"
+        const lastCandle = c.candles[c.candles.length - 1];
+        if (this.held.has(mint) && c.mcapSol > 0 && (!lastCandle || now - lastCandle[0] >= 10_000)) {
+          addToCandles(c, now, c.mcapSol, 0);
+          if (this.tickListeners.size) for (const fn of this.tickListeners) fn(c, now);
+        }
+      }
       if (c.history.length > 360) c.history.splice(0, c.history.length - 360);
       c.trades = c.trades.filter((t) => now - t.t < 15 * 60_000);
       if (c.smart.length) c.smart = c.smart.filter((t) => now - t.t < 60 * 60_000);
