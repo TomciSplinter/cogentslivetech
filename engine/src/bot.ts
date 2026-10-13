@@ -251,6 +251,10 @@ export class Bot {
     if (this.busy || !this.state.positions.size) return;
     this.busy = true;
     try {
+      if (config.sellAll) {
+        for (const p of [...this.state.positions.values()]) await this.sell(p, "admin:sell-all", now);
+        return;
+      }
       await this.enforceExits(now);
     } catch (e) {
       log(this.def.id, "guard error:", (e as Error).message);

@@ -64,6 +64,8 @@ export const config = {
 
   /** If set, the engine stops all buying (sells still allowed). Emergency brake. */
   pauseBuys: bool("PAUSE_BUYS", false),
+  /** SELL_ALL=true: every bot sells every bag at the next check and makes no new buys. */
+  sellAll: bool("SELL_ALL", false),
 
   // ---- public API (create-a-bot etc.) ----
   apiPort: num("API_PORT", 8787),

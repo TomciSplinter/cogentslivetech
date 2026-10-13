@@ -78,7 +78,7 @@ export function checkBuy(
   now: number,
 ): BuyCheck {
   rollDay(s, now);
-  if (config.pauseBuys) return { ok: false, reason: "buys are paused by admin" };
+  if (config.pauseBuys || config.sellAll) return { ok: false, reason: "buys are paused by admin" };
   if (!mint || !menuMints.has(mint)) return { ok: false, reason: "coin was not on this turn's menu" };
   if (s.positions.has(mint)) return { ok: false, reason: "already holding this coin" };
   if (s.positions.size >= limits.maxPositions) return { ok: false, reason: "max positions reached" };
