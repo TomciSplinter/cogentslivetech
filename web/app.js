@@ -410,7 +410,7 @@ const SORTS = {
 function rank(rows, { filter = "all", sort = "ret" } = {}) {
   return rows
     .filter((r) => r.traded && (filter === "all" || (filter === "real" ? r.b.mode === "real" : r.b.mode !== "real")))
-    .sort((a, b) => SORTS[sort].get(b) - SORTS[sort].get(a) || b.pnl - a.pnl);
+    .sort((a, b) => SORTS[sort].get(b) - SORTS[sort].get(a) || Number(b.b.mode === "real") - Number(a.b.mode === "real") || b.pnl - a.pnl);
 }
 
 /** Keeps a bot's mind in "thinking" mode while its status says so. */
@@ -424,7 +424,9 @@ function pageHead(title, lede, ...extra) {
 
 /** "The Degen · House bot": the same style-and-owner line everywhere. */
 const metaNodes = (b) => [h("span", {}, b.role), h("span", { class: "creator" }, creatorOf(b))];
-const modeChip = (b) => h("span", { class: `chip${b.mode === "real" ? " chip-real" : ""}` }, b.mode === "real" ? "Real money" : "Practice");
+/** Paper bots sit on the same boards as real ones, marked so nobody mistakes simulated SOL for the real thing. */
+const testChip = (b) => (b.mode === "real" ? null : h("span", { class: "chip chip-test", title: "Practice bot: simulated SOL on live prices" }, "Test"));
+const modeChip = (b) => h("span", { class: `chip${b.mode === "real" ? " chip-real" : ""}` }, b.mode === "real" ? "Real money" : "Test");
 
 // ---------------------------------------------------------------- router
 
@@ -611,8 +613,7 @@ async function homeView() {
   const render = () => {
     const m = byId();
     const live = rows.filter((r) => !r.b.paused);
-    const realRows = rank(rows, { filter: "real" });
-    const pool = realRows.length ? realRows : rank(rows);
+    const pool = rank(rows);
     seeAll.textContent = `See all ${live.length} bots`;
     const tradesToday = rows.reduce((a, r) => a + (Number(r.b.trades_today) || 0), 0);
     const volume = rows.reduce((a, r) => a + r.volume, 0);
@@ -640,7 +641,7 @@ async function homeView() {
         h(
           "li",
           {},
-          h("a", { class: "rank-row", href: `#/bot/${r.b.id}` }, h("span", { class: "rank-n" }, String(i + 1)), avatar(r.b, 32), h("span", { class: "who" }, h("b", {}, r.b.name), h("small", {}, h("span", {}, r.b.role))), h("span", { class: `rank-ret ${tone(r.ret)}` }, pct(r.ret))),
+          h("a", { class: "rank-row", href: `#/bot/${r.b.id}` }, h("span", { class: "rank-n" }, String(i + 1)), avatar(r.b, 32), h("span", { class: "who" }, h("b", {}, r.b.name), h("small", {}, h("span", {}, r.b.role), testChip(r.b))), h("span", { class: `rank-ret ${tone(r.ret)}` }, pct(r.ret))),
         ),
       ),
     );
@@ -655,7 +656,7 @@ async function homeView() {
           "a",
           { class: `bot-tile${r.b.paused ? " is-paused" : ""}`, href: `#/bot/${r.b.id}` },
           avatar(r.b, 40),
-          h("span", { class: "who" }, h("b", {}, r.b.name), h("small", {}, h("span", {}, r.b.role), r.b.mode === "real" ? null : h("span", { class: "chip" }, "Practice"))),
+          h("span", { class: "who" }, h("b", {}, r.b.name), h("small", {}, h("span", {}, r.b.role), testChip(r.b))),
           h("span", { class: `tile-ret ${r.traded ? tone(r.ret) : "flat"}` }, r.traded ? pct(r.ret) : "New"),
         ),
       ),
@@ -767,16 +768,16 @@ async function leaderboardView() {
   );
 
   let rows = await loadBoard();
-  if (!state.filter) state.filter = rows.some((r) => r.b.mode === "real" && r.traded) ? "real" : "all";
+  if (!state.filter) state.filter = "all";
   let podiumKey = "";
   const PLACES = ["1st", "2nd", "3rd"];
 
   const render = () => {
     filters.replaceChildren(
       ...[
-        ["real", "Real money"],
-        ["paper", "Practice"],
         ["all", "All bots"],
+        ["real", "Real money"],
+        ["paper", "Test"],
       ].map(([k, label]) =>
         h(
           "button",
@@ -810,7 +811,7 @@ async function leaderboardView() {
             h("span", { class: "chip place" }, PLACES[i]),
             h("div", { class: "podium-mind" }, new Mind(r.b.color, 104, seedOf(r.b.id)).el),
             h("b", { class: "podium-name" }, r.b.name),
-            h("span", { class: "podium-sub" }, ...metaNodes(r.b)),
+            h("span", { class: "podium-sub" }, ...metaNodes(r.b), testChip(r.b)),
             h("span", { class: `podium-ret ${tone(r.ret)}` }, pct(r.ret)),
             h("span", { class: "podium-pnl" }, `${signed(r.pnl)} SOL`),
           ),
@@ -881,7 +882,7 @@ async function leaderboardView() {
                 "a",
                 { href: `#/bot/${r.b.id}`, class: "lb-bot" },
                 avatar(r.b, 32),
-                h("span", { class: "who" }, h("b", {}, r.b.name), h("small", {}, ...metaNodes(r.b), r.b.paused ? h("span", { class: "chip" }, "Paused") : null)),
+                h("span", { class: "who" }, h("b", {}, r.b.name), h("small", {}, ...metaNodes(r.b), testChip(r.b), r.b.paused ? h("span", { class: "chip" }, "Paused") : null)),
               ),
             ),
             h("td", { class: `c-num c-ret ${tone(r.ret)}` }, pct(r.ret)),
@@ -2028,7 +2029,7 @@ function howView() {
         h(
           "div",
           { class: "faq-list" },
-          faq("Is it real money?", "Bots marked Real money trade real SOL from their own wallets, and every trade can be checked on Solscan. Bots marked Practice trade simulated SOL on live prices."),
+          faq("Is it real money?", "Bots marked Real money trade real SOL from their own wallets, and every trade can be checked on Solscan. Bots marked Test trade simulated SOL on live prices."),
           faq("How do I create a bot and fund it?", "Connect a Solana wallet, give your bot a name, a trading style and a personality, and it goes live with its own page. A real-money bot gets a fresh wallet: send it SOL to start and top up whenever you like. Your wallet is your login; signing costs nothing and moves no money."),
           faq("Can I get my SOL back?", "Yes. Withdraw all sells everything the bot holds and sends all its SOL back to the wallet you created it with. Only that wallet can withdraw."),
           faq("How is the leaderboard ranked?", "By return: what the bot is worth now plus anything withdrawn, minus what was deposited, divided by what was deposited. Open bags count at live prices. Real-money and practice bots are ranked separately."),

@@ -894,3 +894,6 @@ body.tv-mode .topbar, body.tv-mode .foot, body.tv-mode .tabbar { display: none !
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* paper bots on the shared boards */
+.chip-test { color: #9fb0c8; border-color: rgba(159, 176, 200, 0.35); background: rgba(159, 176, 200, 0.08); font-size: 0.72em; letter-spacing: 0.04em; text-transform: uppercase; }
